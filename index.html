@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>KRG ì¬ì¬ íë ì íë ëìë³´ë</title>
+<title>KRG 심사 한도 정확도 대시보드</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"></script>
@@ -100,7 +100,7 @@ function Dashboard(){
       .then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.text()})
       .then(text=>{
         const parsed=parseCSV(text);
-        if(parsed.length===0)throw new Error("ë°ì´í°ê° ë¹ì´ììµëë¤.");
+        if(parsed.length===0)throw new Error("데이터가 비어있습니다.");
         setRawData(parsed);setLastUpdated(new Date());setLoading(false);
       })
       .catch(err=>{setError(err.message);setLoading(false)});
@@ -115,28 +115,28 @@ function Dashboard(){
     React.createElement("div",{style:{width:48,height:48,border:`4px solid ${C.grayLight}`,
       borderTopColor:C.primary,borderRadius:"50%",animation:"spin 0.8s linear infinite"}}),
     React.createElement("style",null,"@keyframes spin{to{transform:rotate(360deg)}}"),
-    React.createElement("p",{style:{marginTop:16,color:C.textSub,fontSize:14}},"Google Sheetsìì ë°ì´í° ë¡ë© ì¤...")
+    React.createElement("p",{style:{marginTop:16,color:C.textSub,fontSize:14}},"Google Sheets에서 데이터 로됩 중...")
   );
 
   if(error||!metrics)return React.createElement("div",{style:{display:"flex",flexDirection:"column",
     alignItems:"center",justifyContent:"center",minHeight:"100vh",background:C.bg}},
-    React.createElement("div",{style:{fontSize:48,marginBottom:16}},"â ï¸"),
-    React.createElement("h2",{style:{color:C.text,fontSize:20,fontWeight:700}},"ë°ì´í°ë¡ë© ì¤í¨"),
-    React.createElement("p",{style:{color:C.textSub,fontSize:14,marginBottom:20,textAlign:"center",maxWidth:400}},error||"ì ì ìë ì¤ë¥"),
+    React.createElement("div",{style:{fontSize:48,marginBottom:16}},"⚠️"),
+    React.createElement("h2",{style:{color:C.text,fontSize:20,fontWeight:700}},"데이터로딩 실패"),
+    React.createElement("p",{style:{color:C.textSub,fontSize:14,marginBottom:20,textAlign:"center",maxWidth:400}},error||"알 수 없는 오류"),
     React.createElement("button",{onClick:fetchData,style:{background:C.primary,color:"white",
-      border:"none",borderRadius:10,padding:"10px 24px",fontSize:14,fontWeight:600,cursor:"pointer"}},"ë¤ì ìë")
+      border:"none",borderRadius:10,padding:"10px 24px",fontSize:14,fontWeight:600,cursor:"pointer"}},"다시 시도")
   );
 
   const{total,delinquentCount,overallRate,gradeData,mAP}=metrics;
   const overLimitCount=rawData.filter(d=>d.r/d.lhat>1).length;
 
-  const barData=gradeData.map(gd=>({grade:`${gd.grade}`,"ì°ì²´ì¨(%)":parseFloat(gd.ratePct),contracts:gd.contracts,delinquent:gd.delinquent}));
+  const barData=gradeData.map(gd=>({grade:`${gd.grade}`,"연체율(%)":parseFloat(gd.ratePct),contracts:gd.contracts,delinquent:gd.delinquent}));
   const apData=gradeData.map(gd=>({grade:`${gd.grade}`,AP:gd.ap,good:gd.good,total:gd.contracts}));
 
   const CustomTooltip=({active,payload,label,type})=>{
     if(!active||!payload||!payload.length)return null;
     return React.createElement("div",{style:{background:"white",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 16px",boxShadow:"0 4px 12px rgba(0,0,0,0.1)",fontSize:13}},
-      React.createElement("div",{style:{fontWeight:700,marginBottom:6,color:C.text}},"ë±ê¸ "+label),
+      React.createElement("div",{style:{fontWeight:700,marginBottom:6,color:C.text}},"등급 "+label),
       ...payload.map((p,i)=>React.createElement("div",{key:i,style:{display:"flex",alignItems:"center",gap:6,marginTop:3}},
         React.createElement("div",{style:{width:10,height:10,borderRadius:"50%",background:p.color}}),
         React.createElement("span",{style:{color:C.textSub}},p.name+":"),
@@ -151,57 +151,57 @@ function Dashboard(){
       // Header
       React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:32,flexWrap:"wrap",gap:12}},
         React.createElement("div",null,
-          React.createElement("h1",{style:{fontSize:28,fontWeight:800,color:C.text,letterSpacing:-0.5}},"ì¬ì¬ íë ì íë ëìë³´ë"),
+          React.createElement("h1",{style:{fontSize:28,fontWeight:800,color:C.text,letterSpacing:-0.5}},"심사 한도 정확도 대시보드"),
           React.createElement("p",{style:{fontSize:14,color:C.textSub,marginTop:6}},
-            `ê³ì½ ì°ì²´ì¨ ë° ë±ê¸ë³ íë íë¨ ì íë(AP/mAP) ë¶ì Â· ì ì²´ ${total}ê±´`)
+            `계약 연체율 및 등급별 한도 판단 정확도(AP/mAP) 분석 · 전체 ${total}건`)
         ),
         React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},
           lastUpdated&&React.createElement("span",{style:{fontSize:12,color:C.textSub}},
-            "ë§ì§ë§ ê°±ì : "+lastUpdated.toLocaleTimeString("ko-KR")),
+            "마지막 갱신: "+lastUpdated.toLocaleTimeString("ko-KR")),
           React.createElement("button",{onClick:fetchData,style:{background:C.primary,color:"white",
             border:"none",borderRadius:10,padding:"8px 18px",fontSize:13,fontWeight:600,
-            cursor:"pointer",display:"flex",alignItems:"center",gap:6}},"ð ìë¡ê³ ì¹¨")
+            cursor:"pointer",display:"flex",alignItems:"center",gap:6}},"🔄 새로고침")
         )
       ),
       // KPI Cards
       React.createElement("div",{style:{display:"flex",gap:20,marginBottom:32,flexWrap:"wrap"}},
-        React.createElement(KpiCard,{title:"ì ì²´ ê³ì½",value:total.toLocaleString()+"ê±´",
-          sub:`ë±ê¸ 1~${gradeData.length} Â· Google Sheets ì°ë`,color:C.primary,icon:"ð"}),
-        React.createElement(KpiCard,{title:"30ì¼ ì´ì ì°ì²´ì¨",value:(overallRate*100).toFixed(1)+"%",
-          sub:`${delinquentCount}ê±´ / ${total}ê±´`,color:C.danger,icon:"â ï¸"}),
-        React.createElement(KpiCard,{title:"mAP (ì ì²´ íê· )",value:(mAP*100).toFixed(1)+"%",
-          sub:`${gradeData.length}ê° ë±ê¸ AP ë¨ì íê· `,color:C.success,icon:"ð¯"}),
-        React.createElement(KpiCard,{title:"íë ì´ê³¼ ë¹ì¨",value:((overLimitCount/total)*100).toFixed(1)+"%",
-          sub:`z > 1.0 : ${overLimitCount}ê±´`,color:C.warning,icon:"ð"})
+        React.createElement(KpiCard,{title:"전체 계약",value:total.toLocaleString()+"건",
+          sub:`등급 1~${gradeData.length} · Google Sheets 연동`,color:C.primary,icon:"📋"}),
+        React.createElement(KpiCard,{title:"30일 이상 연체율",value:(overallRate*100).toFixed(1)+"%",
+          sub:`${delinquentCount}건 / ${total}건`,color:C.danger,icon:"⚠️"}),
+        React.createElement(KpiCard,{title:"mAP (전체 평균)",value:(mAP*100).toFixed(1)+"%",
+          sub:`${gradeData.length}개 등급 AP 단순 평균`,color:C.success,icon:"🎯"}),
+        React.createElement(KpiCard,{title:"한도 초과 비율",value:((overLimitCount/total)*100).toFixed(1)+"%",
+          sub:`z > 1.0 : ${overLimitCount}건`,color:C.warning,icon:"📊"})
       ),
       // Charts Row
       React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:20}},
         // Delinquency Rate Chart
         React.createElement("div",{style:{background:C.card,borderRadius:16,padding:24,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}},
-          React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:C.text,marginBottom:4}},"ë±ê¸ë³ 30ì¼ ì´ì ì°ì²´ì¨"),
+          React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:C.text,marginBottom:4}},"등급별 30일 이상 연체율"),
           React.createElement("p",{style:{fontSize:12,color:C.textSub,marginBottom:16}},
-            `ë¹¨ê° ì ì  = ì ì²´ íê¹¨2 ${(overallRate*100).toFixed(1)}%)`),
+            `빨간 점선 = 전체 평깨2 ${(overallRate*100).toFixed(1)}%)`),
           React.createElement(ResponsiveContainer,{width:"100%",height:300},
             React.createElement(ComposedChart,{data:barData},
               React.createElement(CartesianGrid,{strokeDasharray:"3 3",stroke:"#f1f5f9"}),
-              React.createElement(XAxis,{dataKey:"grade",tick:{fontSize:12},label:{value:"ë±ê¸",position:"insideBottom",offset:-2,fontSize:12}}),
+              React.createElement(XAxis,{dataKey:"grade",tick:{fontSize:12},label:{value:"등급",position:"insideBottom",offset:-2,fontSize:12}}),
               React.createElement(YAxis,{tick:{fontSize:12},label:{value:"%",angle:-90,position:"insideLeft",fontSize:12},domain:[0,100]}),
               React.createElement(Tooltip,{content:React.createElement(CustomTooltip,{type:"pct"})}),
               React.createElement(ReferenceLine,{y:overallRate*100,stroke:C.danger,strokeDasharray:"6 4",strokeWidth:2}),
-              React.createElement(Bar,{dataKey:"ì°ì²´ì¨(%)",radius:[6,6,0,0],barSize:36},
+              React.createElement(Bar,{dataKey:"연체율(%)",radius:[6,6,0,0],barSize:36},
                 barData.map((_,i)=>React.createElement(Cell,{key:i,fill:GC[i%GC.length],opacity:0.85})))
             )
           )
         ),
         // AP Chart
         React.createElement("div",{style:{background:C.card,borderRadius:16,padding:24,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}},
-          React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:C.text,marginBottom:4}},"ë±ê¸ë³ íë ì íë (AP)"),
+          React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:C.text,marginBottom:4}},"등급별 한도 정확도 (AP)"),
           React.createElement("p",{style:{fontSize:12,color:C.textSub,marginBottom:16}},
-            `ë¹ë¥ ì ì  = mAP (${(mAP*100).toFixed(1)}%) Â· í´ë¦­ ì ìì¸ ë³´ê¸°`),
+            `녹듥 점선 = mAP (${(mAP*100).toFixed(1)}%) · 클릭 시 상세 보기`),
           React.createElement(ResponsiveContainer,{width:"100%",height:300},
             React.createElement(ComposedChart,{data:apData},
               React.createElement(CartesianGrid,{strokeDasharray:"3 3",stroke:"#f1f5f9"}),
-              React.createElement(XAxis,{dataKey:"grade",tick:{fontSize:12},label:{value:"ë±ê¸",position:"insideBottom",offset:-2,fontSize:12}}),
+              React.createElement(XAxis,{dataKey:"grade",tick:{fontSize:12},label:{value:"등급",position:"insideBottom",offset:-2,fontSize:12}}),
               React.createElement(YAxis,{tick:{fontSize:12},domain:[0,1],tickFormatter:v=>(v*100).toFixed(0)+"%"}),
               React.createElement(Tooltip,{content:React.createElement(CustomTooltip,{type:"ap"})}),
               React.createElement(ReferenceLine,{y:mAP,stroke:C.success,strokeDasharray:"6 4",strokeWidth:2}),
@@ -216,14 +216,14 @@ function Dashboard(){
       ),
       // Summary Table
       React.createElement("div",{style:{background:C.card,borderRadius:16,padding:24,marginBottom:20,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}},
-        React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:C.text,marginBottom:16}},"ë±ê¸ë³ ìì¸ ìì½"),
+        React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:C.text,marginBottom:16}},"등급별 상세 요약"),
         React.createElement("div",{style:{overflowX:"auto"}},
           React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:13}},
             React.createElement("thead",null,
               React.createElement("tr",{style:{borderBottom:`2px solid ${C.grayLight}`}},
-                ["ë±ê¸","ê³ì½ ì","ì°ì²´ ì","ì°ì²´ì¨","Good","AP","mAP ëë¹"].map(h=>
+                ["등급","계약 수","연체 수","연체율","Good","AP","mAP 대비"].map(h=>
                   React.createElement("th",{key:h,style:{padding:"10px 12px",
-                    textAlign:h==="ë±ê¸"?"center":"right",color:C.textSub,fontWeight:600,
+                    textAlign:h==="등급"?"center":"right",color:C.textSub,fontWeight:600,
                     fontSize:12,textTransform:"uppercase",letterSpacing:0.5}},h))
               )
             ),
@@ -250,7 +250,7 @@ function Dashboard(){
                   React.createElement("td",{style:{padding:"10px 12px",textAlign:"right"}},
                     React.createElement("span",{style:{fontSize:12,fontWeight:600,
                       color:gd.ap>=mAP?C.success:C.danger}},
-                      (gd.ap>=mAP?"â² ":"â¼ ")+((gd.ap-mAP)*100).toFixed(1)+"%p"))
+                      (gd.ap>=mAP?"▲ ":"▼ ")+((gd.ap-mAP)*100).toFixed(1)+"%p"))
                 ))
             )
           )
@@ -261,23 +261,23 @@ function Dashboard(){
         React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}},
           React.createElement("div",null,
             React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:C.text}},
-              `íë ëë¹ ê³ì½ë¹ì¨ (z) ë¶í¬ ${selectedGrade?`â ë±ê¸ ${selectedGrade}`:"â ì ì²´"}`),
+              `한도 대비 계약비율 (z) 분포 ${selectedGrade?`— 등급 ${selectedGrade}`:"— 전체"}`),
             React.createElement("p",{style:{fontSize:12,color:C.textSub,marginTop:4}},
-              "ë¹¨ê°ì  = z=1.0 (íë) Â· ì´ë¡=Good Â· ë¹¨ê°=ì°ì²´/ì´ê³¼")
+              "빨간선 = z=1.0 (한도) · 초록=Good · 빨강=연체/초과")
           ),
           selectedGrade&&React.createElement("button",{onClick:()=>setSelectedGrade(null),
             style:{background:C.grayLight,border:"none",borderRadius:8,padding:"6px 14px",
-              fontSize:12,fontWeight:600,cursor:"pointer",color:C.text}},"ì ì²´ ë³´ê¸° â")
+              fontSize:12,fontWeight:600,cursor:"pointer",color:C.text}},"전체 보기 ✕")
         ),
         React.createElement(ResponsiveContainer,{width:"100%",height:320},
           React.createElement(ScatterChart,{margin:{top:10,right:30,bottom:20,left:10}},
             React.createElement(CartesianGrid,{strokeDasharray:"3 3",stroke:"#f1f5f9"}),
-            React.createElement(XAxis,{dataKey:"grade",type:"number",name:"ë±ê¸",
+            React.createElement(XAxis,{dataKey:"grade",type:"number",name:"등급",
               domain:selectedGrade?[selectedGrade-0.5,selectedGrade+0.5]:[0.5,gradeData.length+0.5],
-              tick:{fontSize:12},label:{value:"ë±ê¸",position:"insideBottom",offset:-8,fontSize:12},
+              tick:{fontSize:12},label:{value:"등급",position:"insideBottom",offset:-8,fontSize:12},
               ticks:selectedGrade?[selectedGrade]:gradeData.map(g=>g.grade)}),
             React.createElement(YAxis,{dataKey:"z",type:"number",name:"z",tick:{fontSize:12},
-              label:{value:"z = R / LÌ",angle:-90,position:"insideLeft",offset:5,fontSize:12},
+              label:{value:"z = R / L̂",angle:-90,position:"insideLeft",offset:5,fontSize:12},
               domain:[0.3,"auto"]}),
             React.createElement(ZAxis,{range:[50,50]}),
             React.createElement(ReferenceLine,{y:1.0,stroke:C.danger,strokeDasharray:"6 4",strokeWidth:2}),
@@ -297,7 +297,7 @@ function Dashboard(){
       ),
       // Footer
       React.createElement("div",{style:{textAlign:"center",padding:"16px 0 32px",fontSize:12,color:C.textSub}},
-        `KRGê·¸ë£¹ ì¬ì¬ íë ì íë ëìë³´ë Â· ë°ì´í°: Google Sheets ì¤ìê° ì°ë Â· ${total}ê±´ Â· mAP ${(mAP*100).toFixed(1)}%`)
+        `KRG그룹 심사 한도 정확도 대시보드 · 데이터: Google Sheets 실시간 연동 · ${total}건 · mAP ${(mAP*100).toFixed(1)}%`)
     )
   );
 }
