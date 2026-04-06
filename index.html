@@ -295,6 +295,77 @@ function Dashboard(){
           )
         )
       ),
+      // Precision@k Detail View (grade drill-down)
+      selectedGrade&&React.createElement("div",{style:{background:C.card,borderRadius:16,padding:24,marginBottom:20,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}},
+        (()=>{
+          const gd=gradeData.find(g=>g.grade===selectedGrade);
+          if(!gd)return null;
+          const items=gd.items;
+          let gc=0;
+          const pkData=items.map((d,idx)=>{
+            if(d.good===1)gc++;
+            const prec=gc/(idx+1);
+            return{rank:idx+1,z:parseFloat(d.z.toFixed(3)),del:d.d,good:d.good,gc,precK:prec};
+          });
+          const ap=gd.ap;
+          return React.createElement(React.Fragment,null,
+            React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}},
+              React.createElement("div",null,
+                React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:C.text}},
+                  `                `,
+                  "등급 "+selectedGrade+" — AP 계산 과정 (Precision @ k)"),
+                React.createElement("p",{style:{fontSize:12,color:C.textSub,marginTop:4}},
+                  "z 오름차순 정렬 · Good=1 지점에서의 Precision 평균 = AP "+(ap*100).toFixed(1)+"%")),
+              React.createElement("button",{onClick:()=>setSelectedGrade(null),
+                style:{background:C.grayLight,border:"none",borderRadius:8,padding:"6px 14px",
+                  fontSize:12,fontWeight:600,cursor:"pointer",color:C.text}},"전체 보기 ✕")
+            ),
+            React.createElement(ResponsiveContainer,{width:"100%",height:300},
+              React.createElement(ComposedChart,{data:pkData,margin:{top:10,right:50,bottom:20,left:10}},
+                React.createElement(CartesianGrid,{strokeDasharray:"3 3",stroke:"#f1f5f9"}),
+                React.createElement(XAxis,{dataKey:"rank",tick:{fontSize:11},label:{value:"순위 (z 오름차순)",position:"insideBottom",offset:-8,fontSize:12}}),
+                React.createElement(YAxis,{yAxisId:"left",tick:{fontSize:11},domain:[0,1],tickFormatter:v=>(v*100).toFixed(0)+"%",
+                  label:{value:"Precision",angle:-90,position:"insideLeft",offset:5,fontSize:12}}),
+                React.createElement(YAxis,{yAxisId:"right",orientation:"right",tick:{fontSize:11},domain:[0,"auto"],
+                  label:{value:"z",angle:90,position:"insideRight",offset:5,fontSize:12}}),
+                React.createElement(ReferenceLine,{yAxisId:"left",y:ap,stroke:C.danger,strokeDasharray:"6 4",strokeWidth:1.5}),
+                React.createElement(ReferenceLine,{yAxisId:"right",y:1.0,stroke:C.danger,strokeDasharray:"3 3",strokeWidth:1,opacity:0.5}),
+                React.createElement(Area,{yAxisId:"left",dataKey:"precK",stroke:C.primary,fill:C.primaryLight,fillOpacity:0.15,strokeWidth:2,dot:false,name:"Precision@k"}),
+                React.createElement(Line,{yAxisId:"right",dataKey:"z",stroke:C.gray,strokeWidth:1.5,strokeDasharray:"4 3",dot:false,name:"z값"}),
+                pkData.filter(d=>d.good===1).length>0&&React.createElement(Scatter,{yAxisId:"left",
+                  data:pkData.filter(d=>d.good===1).map(d=>({rank:d.rank,precK:d.precK})),
+                  fill:C.success,name:"Good",opacity:0.8}),
+                React.createElement(Legend,{wrapperStyle:{fontSize:11}})
+              )
+            ),
+            React.createElement("div",{style:{overflowX:"auto",marginTop:16,maxHeight:400,overflowY:"auto"}},
+              React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:12}},
+                React.createElement("thead",null,
+                  React.createElement("tr",{style:{borderBottom:"2px solid "+C.grayLight,position:"sticky",top:0,background:C.card}},
+                    ["#","z","연체","Good","누적Good","Precision"].map(h=>
+                      React.createElement("th",{key:h,style:{padding:"8px 10px",textAlign:"center",color:C.textSub,fontWeight:600,fontSize:11}},h))
+                  )
+                ),
+                React.createElement("tbody",null,
+                  pkData.map((d,i)=>
+                    React.createElement("tr",{key:i,style:{borderBottom:"1px solid "+C.grayLight,
+                      background:d.good===1?"#f0fdf4":d.del===1?"#fef2f2":"transparent"}},
+                      React.createElement("td",{style:{padding:"6px 10px",textAlign:"center",fontWeight:700}},d.rank),
+                      React.createElement("td",{style:{padding:"6px 10px",textAlign:"center"}},d.z.toFixed(3)),
+                      React.createElement("td",{style:{padding:"6px 10px",textAlign:"center",color:d.del===1?C.danger:C.gray,fontWeight:d.del===1?700:400}},
+                        d.del===1?"발생":"—"),
+                      React.createElement("td",{style:{padding:"6px 10px",textAlign:"center"}},
+                        d.good===1?"✅":"⚪"),
+                      React.createElement("td",{style:{padding:"6px 10px",textAlign:"center"}},d.gc+"/"+d.rank),
+                      React.createElement("td",{style:{padding:"6px 10px",textAlign:"center",fontWeight:600,
+                        color:d.precK>=ap?C.success:C.textSub}},(d.precK*100).toFixed(1)+"%")
+                    ))
+                )
+              )
+            )
+          );
+        })()
+      ),
       // Footer
       React.createElement("div",{style:{textAlign:"center",padding:"16px 0 32px",fontSize:12,color:C.textSub}},
         `KRG그룹 심사 한도 정확도 대시보드 · 데이터: Google Sheets 실시간 연동 · ${total}건 · mAP ${(mAP*100).toFixed(1)}%`)
