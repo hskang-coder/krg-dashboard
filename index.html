@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>KRG ì¬ì¬ íë ì íë ëìë³´ë</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.15.0/Recharts.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:#f8fafc}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useMemo,useEffect,useCallback}=React;
+const {ResponsiveContainer,ComposedChart,BarChart,Bar,XAxis,YAxis,
+CartesianGrid,Tooltip,Legend,Cell,ReferenceLine,ScatterChart,
+Scatter,ZAxis,Area,Line}=Recharts;
+
+const SHEET_ID="1Y0TZ6MX13OV0ZbTEFWpqmd38hfhRkrgtuwsA76Qz_IA";
+const CSV_URL=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=0`;
+
+function parseCSV(text){
+  const lines=text.trim().split("\n");
+  if(lines.length<2)return[];
+  return lines.slice(1).map(line=>{
+    const f=[];let c="",q=false;
+    for(let i=0;i<line.length;i++){
+      const ch=line[i];
+      if(ch==='"'){q=!q;continue}
+      if(ch===','&&!q){f.push(c);c="";continue}
+      c+=ch;
+    }
+    f.push(c);
+    return{g:parseInt(f[0]),lhat:parseFloat(f[2]),r:parseFloat(f[3]),d:parseInt(f[6])};
+  }).filter(d=>!isNaN(d.g)&&!isNaN(d.lhat));
+}
+
+function computeMetrics(data){
+  const total=data.length;
+  const delCnt=data.filter(d=>d.d===1).length;
+  const overallRate=delCnt/total;
+  const grades=[...new Set(data.map(d=>d.g))].sort((a,b)=>a-b);
+  const gradeData=grades.map(g=>{
+    const items=data.filter(d=>d.g===g);
+    const cnt=items.length;
+    const dc=items.filter(d=>d.d===1).length;
+    const rate=dc/cnt;
+    const withZ=items.map(d=>{
+      const z=d.r/d.lhat;
+      const good=(z<=1.0&&d.d===0)?1:0;
+      return{...d,z,good};
+    }).sort((a,b)=>a.z-b.z);
+    const totalGood=withZ.filter(d=>d.good===1).length;
+    let gc=0,ps=0;
+    withZ.forEach((d,idx)=>{if(d.good===1){gc++;ps+=gc/(idx+1)}});
+    const ap=totalGood>0?ps/totalGood:0;
+    return{grade:g,contracts:cnt,delinquent:dc,rate,
+      ratePct:(rate*100).toFixed(1),good:totalGood,ap,
+      apRound:(ap*100).toFixed(1),items:withZ};
+  });
+  const mAP=gradeData.reduce((s,d)=>s+d.ap,0)/gradeData.length;
+  return{total,delinquentCount:delCnt,overallRate,gradeData,mAP};
+}
+
+const C={primary:"#2563eb",primaryLight:"#93c5fd",danger:"#ef4444",
+  dangerLight:"#fca5a5",success:"#10b981",successLight:"#6ee7b7",
+  warning:"#f59e0b",warningLight:"#fcd34d",gray:"#6b7280",
+  grayLight:"#e5e7eb",bg:"#f8fafc",card:"#ffffff",
+  text:"#1e293b",textSub:"#64748b"};
+const GC=["#2563eb","#3b82f6","#0ea5e9","#06b6d4","#14b8a6",
+  "#f59e0b","#f97316","#ef4444","#dc2626","#991b1b"];
+
+function KpiCard({title,value,sub,color,icon}){
+  return React.createElement("div",{style:{background:C.card,borderRadius:16,
+    padding:"28px 24px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)",
+    borderLeft:`4px solid ${color}`,flex:1,minWidth:200}},
+    React.createElement("div",{style:{fontSize:13,color:C.textSub,fontWeight:600,
+      letterSpacing:0.5,textTransform:"uppercase",marginBottom:8}},icon+" "+title),
+    React.createElement("div",{style:{fontSize:36,fontWeight:700,color,lineHeight:1.1}},value),
+    sub&&React.createElement("div",{style:{fontSize:13,color:C.textSub,marginTop:6}},sub)
+  );
+}
+
+function Dashboard(){
+  const[rawData,setRawData]=useState(null);
+  const[loading,setLoading]=useState(true);
+  const[error,setError]=useState(null);
+  const[selectedGrade,setSelectedGrade]=useState(null);
+  const[lastUpdated,setLastUpdated]=useState(null);
+
+  const fetchData=useCallback(()=>{
+    setLoading(true);setError(null);
+    fetch(CSV_URL)
+      .then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.text()})
+      .then(text=>{
+        const parsed=parseCSV(text);
+        if(parsed.length===0)throw new Error("ë°ì´í°ê° ë¹ì´ììµëë¤.");
+        setRawData(parsed);setLastUpdated(new Date());setLoading(false);
+      })
+      .catch(err=>{setError(err.message);setLoading(false)});
+  },[]);
+
+  useEffect(()=>{fetchData()},[fetchData]);
+
+  const metrics=useMemo(()=>rawData?computeMetrics(rawData):null,[rawData]);
+
+  if(loading)return React.createElement("div",{style:{display:"flex",flexDirection:"column",
+    alignItems:"center",justifyContent:"center",minHeight:"100vh",background:C.bg}},
+    React.createElement("div",{style:{width:48,height:48,border:`4px solid ${C.grayLight}`,
+      borderTopColor:C.primary,borderRadius:"50%",animation:"spin 0.8s linear infinite"}}),
+    React.createElement("style",null,"@keyframes spin{to{transform:rotate(360deg)}}"),
+    React.createElement("p",{style:{marginTop:16,color:C.textSub,fontSize:14}},"Google Sheetsìì ë°ì´í° ë¡ë© ì¤...")
+  );
+
+  if(error||!metrics)return React.createElement("div",{style:{display:"flex",flexDirection:"column",
+    alignItems:"center",justifyContent:"center",minHeight:"100vh",background:C.bg}},
+    React.createElement("div",{style:{fontSize:48,marginBottom:16}},"â ï¸"),
+    React.createElement("h2",{style:{color:C.text,fontSize:20,fontWeight:700}},"ë°ì´í°ë¡ë© ì¤í¨"),
+    React.createElement("p",{style:{color:C.textSub,fontSize:14,marginBottom:20,textAlign:"center",maxWidth:400}},error||"ì ì ìë ì¤ë¥"),
+    React.createElement("button",{onClick:fetchData,style:{background:C.primary,color:"white",
+      border:"none",borderRadius:10,padding:"10px 24px",fontSize:14,fontWeight:600,cursor:"pointer"}},"ë¤ì ìë")
+  );
+
+  const{total,delinquentCount,overallRate,gradeData,mAP}=metrics;
+  const overLimitCount=rawData.filter(d=>d.r/d.lhat>1).length;
+
+  const barData=gradeData.map(gd=>({grade:`${gd.grade}`,"ì°ì²´ì¨(%)":parseFloat(gd.ratePct),contracts:gd.contracts,delinquent:gd.delinquent}));
+  const apData=gradeData.map(gd=>({grade:`${gd.grade}`,AP:gd.ap,good:gd.good,total:gd.contracts}));
+
+  const CustomTooltip=({active,payload,label,type})=>{
+    if(!active||!payload||!payload.length)return null;
+    return React.createElement("div",{style:{background:"white",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 16px",boxShadow:"0 4px 12px rgba(0,0,0,0.1)",fontSize:13}},
+      React.createElement("div",{style:{fontWeight:700,marginBottom:6,color:C.text}},"ë±ê¸ "+label),
+      ...payload.map((p,i)=>React.createElement("div",{key:i,style:{display:"flex",alignItems:"center",gap:6,marginTop:3}},
+        React.createElement("div",{style:{width:10,height:10,borderRadius:"50%",background:p.color}}),
+        React.createElement("span",{style:{color:C.textSub}},p.name+":"),
+        React.createElement("span",{style:{fontWeight:600,color:C.text}},
+          type==="pct"?p.value+"%":type==="ap"?(p.value*100).toFixed(1)+"%":p.value)
+      ))
+    );
+  };
+
+  return React.createElement("div",{style:{background:C.bg,minHeight:"100vh",padding:"32px 24px"}},
+    React.createElement("div",{style:{maxWidth:1200,margin:"0 auto"}},
+      // Header
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:32,flexWrap:"wrap",gap:12}},
+        React.createElement("div",null,
+          React.createElement("h1",{style:{fontSize:28,fontWeight:800,color:C.text,letterSpacing:-0.5}},"ì¬ì¬ íë ì íë ëìë³´ë"),
+          React.createElement("p",{style:{fontSize:14,color:C.textSub,marginTop:6}},
+            `ê³ì½ ì°ì²´ì¨ ë° ë±ê¸ë³ íë íë¨ ì íë(AP/mAP) ë¶ì Â· ì ì²´ ${total}ê±´`)
+        ),
+        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},
+          lastUpdated&&React.createElement("span",{style:{fontSize:12,color:C.textSub}},
+            "ë§ì§ë§ ê°±ì : "+lastUpdated.toLocaleTimeString("ko-KR")),
+          React.createElement("button",{onClick:fetchData,style:{background:C.primary,color:"white",
+            border:"none",borderRadius:10,padding:"8px 18px",fontSize:13,fontWeight:600,
+            cursor:"pointer",display:"flex",alignItems:"center",gap:6}},"ð ìë¡ê³ ì¹¨")
+        )
+      ),
+      // KPI Cards
+      React.createElement("div",{style:{display:"flex",gap:20,marginBottom:32,flexWrap:"wrap"}},
+        React.createElement(KpiCard,{title:"ì ì²´ ê³ì½",value:total.toLocaleString()+"ê±´",
+          sub:`ë±ê¸ 1~${gradeData.length} Â· Google Sheets ì°ë`,color:C.primary,icon:"ð"}),
+        React.createElement(KpiCard,{title:"30ì¼ ì´ì ì°ì²´ì¨",value:(overallRate*100).toFixed(1)+"%",
+          sub:`${delinquentCount}ê±´ / ${total}ê±´`,color:C.danger,icon:"â ï¸"}),
+        React.createElement(KpiCard,{title:"mAP (ì ì²´ íê· )",value:(mAP*100).toFixed(1)+"%",
+          sub:`${gradeData.length}ê° ë±ê¸ AP ë¨ì íê· `,color:C.success,icon:"ð¯"}),
+        React.createElement(KpiCard,{title:"íë ì´ê³¼ ë¹ì¨",value:((overLimitCount/total)*100).toFixed(1)+"%",
+          sub:`z > 1.0 : ${overLimitCount}ê±´`,color:C.warning,icon:"ð"})
+      ),
+      // Charts Row
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:20}},
+        // Delinquency Rate Chart
+        React.createElement("div",{style:{background:C.card,borderRadius:16,padding:24,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}},
+          React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:C.text,marginBottom:4}},"ë±ê¸ë³ 30ì¼ ì´ì ì°ì²´ì¨"),
+          React.createElement("p",{style:{fontSize:12,color:C.textSub,marginBottom:16}},
+            `ë¹¨ê° ì ì  = ì ì²´ íê¹¨2 ${(overallRate*100).toFixed(1)}%)`),
+          React.createElement(ResponsiveContainer,{width:"100%",height:300},
+            React.createElement(ComposedChart,{data:barData},
+              React.createElement(CartesianGrid,{strokeDasharray:"3 3",stroke:"#f1f5f9"}),
+              React.createElement(XAxis,{dataKey:"grade",tick:{fontSize:12},label:{value:"ë±ê¸",position:"insideBottom",offset:-2,fontSize:12}}),
+              React.createElement(YAxis,{tick:{fontSize:12},label:{value:"%",angle:-90,position:"insideLeft",fontSize:12},domain:[0,100]}),
+              React.createElement(Tooltip,{content:React.createElement(CustomTooltip,{type:"pct"})}),
+              React.createElement(ReferenceLine,{y:overallRate*100,stroke:C.danger,strokeDasharray:"6 4",strokeWidth:2}),
+              React.createElement(Bar,{dataKey:"ì°ì²´ì¨(%)",radius:[6,6,0,0],barSize:36},
+                barData.map((_,i)=>React.createElement(Cell,{key:i,fill:GC[i%GC.length],opacity:0.85})))
+            )
+          )
+        ),
+        // AP Chart
+        React.createElement("div",{style:{background:C.card,borderRadius:16,padding:24,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}},
+          React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:C.text,marginBottom:4}},"ë±ê¸ë³ íë ì íë (AP)"),
+          React.createElement("p",{style:{fontSize:12,color:C.textSub,marginBottom:16}},
+            `ë¹ë¥ ì ì  = mAP (${(mAP*100).toFixed(1)}%) Â· í´ë¦­ ì ìì¸ ë³´ê¸°`),
+          React.createElement(ResponsiveContainer,{width:"100%",height:300},
+            React.createElement(ComposedChart,{data:apData},
+              React.createElement(CartesianGrid,{strokeDasharray:"3 3",stroke:"#f1f5f9"}),
+              React.createElement(XAxis,{dataKey:"grade",tick:{fontSize:12},label:{value:"ë±ê¸",position:"insideBottom",offset:-2,fontSize:12}}),
+              React.createElement(YAxis,{tick:{fontSize:12},domain:[0,1],tickFormatter:v=>(v*100).toFixed(0)+"%"}),
+              React.createElement(Tooltip,{content:React.createElement(CustomTooltip,{type:"ap"})}),
+              React.createElement(ReferenceLine,{y:mAP,stroke:C.success,strokeDasharray:"6 4",strokeWidth:2}),
+              React.createElement(Bar,{dataKey:"AP",radius:[6,6,0,0],barSize:36,
+                onClick:d=>setSelectedGrade(parseInt(d.grade)),cursor:"pointer"},
+                apData.map((entry,i)=>React.createElement(Cell,{key:i,
+                  fill:selectedGrade===i+1?C.primary:entry.AP>=mAP?C.success:C.warning,
+                  opacity:selectedGrade&&selectedGrade!==i+1?0.35:0.85})))
+            )
+          )
+        )
+      ),
+      // Summary Table
+      React.createElement("div",{style:{background:C.card,borderRadius:16,padding:24,marginBottom:20,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}},
+        React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:C.text,marginBottom:16}},"ë±ê¸ë³ ìì¸ ìì½"),
+        React.createElement("div",{style:{overflowX:"auto"}},
+          React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:13}},
+            React.createElement("thead",null,
+              React.createElement("tr",{style:{borderBottom:`2px solid ${C.grayLight}`}},
+                ["ë±ê¸","ê³ì½ ì","ì°ì²´ ì","ì°ì²´ì¨","Good","AP","mAP ëë¹"].map(h=>
+                  React.createElement("th",{key:h,style:{padding:"10px 12px",
+                    textAlign:h==="ë±ê¸"?"center":"right",color:C.textSub,fontWeight:600,
+                    fontSize:12,textTransform:"uppercase",letterSpacing:0.5}},h))
+              )
+            ),
+            React.createElement("tbody",null,
+              gradeData.map((gd,i)=>
+                React.createElement("tr",{key:gd.grade,
+                  onClick:()=>setSelectedGrade(selectedGrade===gd.grade?null:gd.grade),
+                  style:{borderBottom:`1px solid ${C.grayLight}`,cursor:"pointer",
+                    background:selectedGrade===gd.grade?"#eff6ff":i%2===0?"transparent":"#fafbfc",
+                    transition:"background 0.15s"}},
+                  React.createElement("td",{style:{padding:"10px 12px",textAlign:"center",fontWeight:700}},
+                    React.createElement("span",{style:{display:"inline-block",width:28,height:28,
+                      lineHeight:"28px",borderRadius:"50%",background:GC[i%GC.length],
+                      color:"white",fontSize:12,fontWeight:700,textAlign:"center"}},gd.grade)),
+                  React.createElement("td",{style:{padding:"10px 12px",textAlign:"right"}},gd.contracts),
+                  React.createElement("td",{style:{padding:"10px 12px",textAlign:"right",color:C.danger,fontWeight:600}},gd.delinquent),
+                  React.createElement("td",{style:{padding:"10px 12px",textAlign:"right"}},
+                    React.createElement("span",{style:{background:gd.rate>overallRate?"#fee2e2":"#dcfce7",
+                      color:gd.rate>overallRate?"#dc2626":"#16a34a",padding:"2px 8px",borderRadius:12,
+                      fontWeight:600,fontSize:12}},gd.ratePct+"%")),
+                  React.createElement("td",{style:{padding:"10px 12px",textAlign:"right"}},gd.good+" / "+gd.contracts),
+                  React.createElement("td",{style:{padding:"10px 12px",textAlign:"right",fontWeight:700,fontSize:15,
+                    color:gd.ap>=mAP?C.success:C.warning}},(gd.ap*100).toFixed(1)+"%"),
+                  React.createElement("td",{style:{padding:"10px 12px",textAlign:"right"}},
+                    React.createElement("span",{style:{fontSize:12,fontWeight:600,
+                      color:gd.ap>=mAP?C.success:C.danger}},
+                      (gd.ap>=mAP?"â² ":"â¼ ")+((gd.ap-mAP)*100).toFixed(1)+"%p"))
+                ))
+            )
+          )
+        )
+      ),
+      // Scatter Plot
+      React.createElement("div",{style:{background:C.card,borderRadius:16,padding:24,marginBottom:20,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}},
+        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}},
+          React.createElement("div",null,
+            React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:C.text}},
+              `íë ëë¹ ê³ì½ë¹ì¨ (z) ë¶í¬ ${selectedGrade?`â ë±ê¸ ${selectedGrade}`:"â ì ì²´"}`),
+            React.createElement("p",{style:{fontSize:12,color:C.textSub,marginTop:4}},
+              "ë¹¨ê°ì  = z=1.0 (íë) Â· ì´ë¡=Good Â· ë¹¨ê°=ì°ì²´/ì´ê³¼")
+          ),
+          selectedGrade&&React.createElement("button",{onClick:()=>setSelectedGrade(null),
+            style:{background:C.grayLight,border:"none",borderRadius:8,padding:"6px 14px",
+              fontSize:12,fontWeight:600,cursor:"pointer",color:C.text}},"ì ì²´ ë³´ê¸° â")
+        ),
+        React.createElement(ResponsiveContainer,{width:"100%",height:320},
+          React.createElement(ScatterChart,{margin:{top:10,right:30,bottom:20,left:10}},
+            React.createElement(CartesianGrid,{strokeDasharray:"3 3",stroke:"#f1f5f9"}),
+            React.createElement(XAxis,{dataKey:"grade",type:"number",name:"ë±ê¸",
+              domain:selectedGrade?[selectedGrade-0.5,selectedGrade+0.5]:[0.5,gradeData.length+0.5],
+              tick:{fontSize:12},label:{value:"ë±ê¸",position:"insideBottom",offset:-8,fontSize:12},
+              ticks:selectedGrade?[selectedGrade]:gradeData.map(g=>g.grade)}),
+            React.createElement(YAxis,{dataKey:"z",type:"number",name:"z",tick:{fontSize:12},
+              label:{value:"z = R / LÌ",angle:-90,position:"insideLeft",offset:5,fontSize:12},
+              domain:[0.3,"auto"]}),
+            React.createElement(ZAxis,{range:[50,50]}),
+            React.createElement(ReferenceLine,{y:1.0,stroke:C.danger,strokeDasharray:"6 4",strokeWidth:2}),
+            React.createElement(Scatter,{data:(selectedGrade
+              ?gradeData.filter(gd=>gd.grade===selectedGrade).flatMap(gd=>gd.items)
+              :gradeData.flatMap(gd=>gd.items))
+              .filter(d=>d.good===1).map(d=>({z:parseFloat(d.z.toFixed(3)),grade:d.g,good:1})),
+              fill:C.success,opacity:0.7,name:"Good"}),
+            React.createElement(Scatter,{data:(selectedGrade
+              ?gradeData.filter(gd=>gd.grade===selectedGrade).flatMap(gd=>gd.items)
+              :gradeData.flatMap(gd=>gd.items))
+              .filter(d=>d.good===0).map(d=>({z:parseFloat(d.z.toFixed(3)),grade:d.g,good:0})),
+              fill:C.danger,opacity:0.5,name:"Not Good"}),
+            React.createElement(Legend,{wrapperStyle:{fontSize:12}})
+          )
+        )
+      ),
+      // Footer
+      React.createElement("div",{style:{textAlign:"center",padding:"16px 0 32px",fontSize:12,color:C.textSub}},
+        `KRGê·¸ë£¹ ì¬ì¬ íë ì íë ëìë³´ë Â· ë°ì´í°: Google Sheets ì¤ìê° ì°ë Â· ${total}ê±´ Â· mAP ${(mAP*100).toFixed(1)}%`)
+    )
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(Dashboard));
+</script>
+</body>
+</html>
