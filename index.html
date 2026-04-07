@@ -180,7 +180,7 @@ function Dashboard(){
         React.createElement("div",{style:{background:C.card,borderRadius:16,padding:24,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}},
           React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:C.text,marginBottom:4}},"등급별 30일 이상 연체율"),
           React.createElement("p",{style:{fontSize:12,color:C.textSub,marginBottom:16}},
-            `빨간 점선 = 전체 평깨2 ${(overallRate*100).toFixed(1)}%)`),
+            `빨간 점선 = 전체 평균 ( ${(overallRate*100).toFixed(1)}%)`),
           React.createElement(ResponsiveContainer,{width:"100%",height:300},
             React.createElement(ComposedChart,{data:barData},
               React.createElement(CartesianGrid,{strokeDasharray:"3 3",stroke:"#f1f5f9"}),
@@ -197,7 +197,7 @@ function Dashboard(){
         React.createElement("div",{style:{background:C.card,borderRadius:16,padding:24,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}},
           React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:C.text,marginBottom:4}},"등급별 한도 정확도 (AP)"),
           React.createElement("p",{style:{fontSize:12,color:C.textSub,marginBottom:16}},
-            `녹듥 점선 = mAP (${(mAP*100).toFixed(1)}%) · 클릭 시 상세 보기`),
+            `녹색 점선 = mAP (${(mAP*100).toFixed(1)}%) · 클릭 시 상세 보기`),
           React.createElement(ResponsiveContainer,{width:"100%",height:300},
             React.createElement(ComposedChart,{data:apData},
               React.createElement(CartesianGrid,{strokeDasharray:"3 3",stroke:"#f1f5f9"}),
@@ -291,7 +291,7 @@ function Dashboard(){
               :gradeData.flatMap(gd=>gd.items))
               .filter(d=>d.good===0).map(d=>({z:parseFloat(d.z.toFixed(3)),grade:d.g,good:0})),
               fill:C.danger,opacity:0.5,name:"Not Good"}),
-            React.createElement(Legend,{wrapperStyle:{fontSize:12}})
+            React.createElement(Legend,{wrapperStyle:{fontSize:13,paddingTop:8},iconSize:14})
           )
         )
       ),
@@ -335,7 +335,7 @@ function Dashboard(){
                 pkData.filter(d=>d.good===1).length>0&&React.createElement(Scatter,{yAxisId:"left",
                   data:pkData.filter(d=>d.good===1).map(d=>({rank:d.rank,precK:d.precK})),
                   fill:C.success,name:"Good",opacity:0.8}),
-                React.createElement(Legend,{wrapperStyle:{fontSize:11}})
+                React.createElement(Legend,{wrapperStyle:{fontSize:13,paddingTop:8},iconSize:14})
               )
             ),
             React.createElement("div",{style:{overflowX:"auto",marginTop:16,maxHeight:400,overflowY:"auto"}},
