@@ -1,1 +1,388 @@
-<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>KRG 심사 한도 정확도 대시보드</title><script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"></script><script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:#f8fafc}</style></head><body><div id="root"></div><script type="text/babel">const {useState,useMemo,useEffect,useCallback}=React;const {ResponsiveContainer,ComposedChart,BarChart,Bar,XAxis,YAxis,CartesianGrid,Tooltip,Legend,Cell,ReferenceLine,ScatterChart,Scatter,ZAxis,Area,Line}=Recharts;const SHEET_ID="1Y0TZ6MX13OV0ZbTEFWpqmd38hfhRkrgtuwsA76Qz_IA";const CSV_URL=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=0`;function parseCSV(text){  const lines=text.trim().split("\n");  if(lines.length<2)return[];  return lines.slice(1).map(line=>{    const f=[];let c="",q=false;    for(let i=0;i<line.length;i++){      const ch=line[i];      if(ch==='"'){q=!q;continue}      if(ch===','&&!q){f.push(c);c="";continue}      c+=ch;    }    f.push(c);    return{g:parseInt(f[0]),lhat:parseFloat(f[2]),r:parseFloat(f[3]),d:parseInt(f[6])};  }).filter(d=>!isNaN(d.g)&&!isNaN(d.lhat));}function computeMetrics(data){  const total=data.length;  const delCnt=data.filter(d=>d.d===1).length;  const overallRate=delCnt/total;  const grades=[...new Set(data.map(d=>d.g))].sort((a,b)=>a-b);  const gradeData=grades.map(g=>{    const items=data.filter(d=>d.g===g);    const cnt=items.length;    const dc=items.filter(d=>d.d===1).length;    const rate=dc/cnt;    const withZ=items.map(d=>{      const z=d.r/d.lhat;      const good=(z<=1.0&&d.d===0)?1:0;      return{...d,z,good};    }).sort((a,b)=>a.z-b.z);    const totalGood=withZ.filter(d=>d.good===1).length;    let gc=0,ps=0;    withZ.forEach((d,idx)=>{if(d.good===1){gc++;ps+=gc/(idx+1)}});    const ap=totalGood>0?ps/totalGood:0;    return{grade:g,contracts:cnt,delinquent:dc,rate,      ratePct:(rate*100).toFixed(1),good:totalGood,ap,      apRound:(ap*100).toFixed(1),items:withZ};  });  const mAP=gradeData.reduce((s,d)=>s+d.ap,0)/gradeData.length;  return{total,delinquentCount:delCnt,overallRate,gradeData,mAP};}const C={primary:"#2563eb",primaryLight:"#93c5fd",danger:"#ef4444",  dangerLight:"#fca5a5",success:"#10b981",successLight:"#6ee7b7",  warning:"#f59e0b",warningLight:"#fcd34d",gray:"#6b7280",  grayLight:"#e5e7eb",bg:"#f8fafc",card:"#ffffff",  text:"#1e293b",textSub:"#64748b"};const GC=["#2563eb","#3b82f6","#0ea5e9","#06b6d4","#14b8a6",  "#f59e0b","#f97316","#ef4444","#dc2626","#991b1b"];function KpiCard({title,value,sub,color,icon}){  return React.createElement("div",{style:{background:C.card,borderRadius:16,    padding:"28px 24px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)",    borderLeft:`4px solid ${color}`,flex:1,minWidth:200}},    React.createElement("div",{style:{fontSize:13,color:C.textSub,fontWeight:600,      letterSpacing:0.5,textTransform:"uppercase",marginBottom:8}},icon+" "+title),    React.createElement("div",{style:{fontSize:36,fontWeight:700,color,lineHeight:1.1}},value),    sub&&React.createElement("div",{style:{fontSize:13,color:C.textSub,marginTop:6}},sub)  );}function Dashboard(){  const[rawData,setRawData]=useState(null);  const[loading,setLoading]=useState(true);  const[error,setError]=useState(null);  const[selectedGrade,setSelectedGrade]=useState(null);  const[lastUpdated,setLastUpdated]=useState(null);  const fetchData=useCallback(()=>{    setLoading(true);setError(null);    fetch(CSV_URL)      .then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.text()})      .then(text=>{        const parsed=parseCSV(text);        if(parsed.length===0)throw new Error("데이터가 비어있습니다.");        setRawData(parsed);setLastUpdated(new Date());setLoading(false);      })      .catch(err=>{setError(err.message);setLoading(false)});  },[]);  useEffect(()=>{fetchData();const iv=setInterval(fetchData,300000);return()=>clearInterval(iv)},[fetchData]);  const metrics=useMemo(()=>rawData?computeMetrics(rawData):null,[rawData]);  if(loading)return React.createElement("div",{style:{display:"flex",flexDirection:"column",    alignItems:"center",justifyContent:"center",minHeight:"100vh",background:C.bg}},    React.createElement("div",{style:{width:48,height:48,border:`4px solid ${C.grayLight}`,      borderTopColor:C.primary,borderRadius:"50%",animation:"spin 0.8s linear infinite"}}),    React.createElement("style",null,"@keyframes spin{to{transform:rotate(360deg)}}"),    React.createElement("p",{style:{marginTop:16,color:C.textSub,fontSize:14}},"Google Sheets에서 데이터 로됩 중...")  );  if(error||!metrics)return React.createElement("div",{style:{display:"flex",flexDirection:"column",    alignItems:"center",justifyContent:"center",minHeight:"100vh",background:C.bg}},    React.createElement("div",{style:{fontSize:48,marginBottom:16}},"⚠️"),    React.createElement("h2",{style:{color:C.text,fontSize:20,fontWeight:700}},"데이터로딩 실패"),    React.createElement("p",{style:{color:C.textSub,fontSize:14,marginBottom:20,textAlign:"center",maxWidth:400}},error||"알 수 없는 오류"),    React.createElement("button",{onClick:fetchData,style:{background:C.primary,color:"white",      border:"none",borderRadius:10,padding:"10px 24px",fontSize:14,fontWeight:600,cursor:"pointer"}},"다시 시도")  );  const{total,delinquentCount,overallRate,gradeData,mAP}=metrics;  const overLimitCount=rawData.filter(d=>d.r/d.lhat>1).length;  const barData=gradeData.map(gd=>({grade:`${gd.grade}`,"연체율(%)":parseFloat(gd.ratePct),contracts:gd.contracts,delinquent:gd.delinquent}));  const apData=gradeData.map(gd=>({grade:`${gd.grade}`,AP:gd.ap,good:gd.good,total:gd.contracts}));  const CustomTooltip=({active,payload,label,type})=>{    if(!active||!payload||!payload.length)return null;    return React.createElement("div",{style:{background:"white",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 16px",boxShadow:"0 4px 12px rgba(0,0,0,0.1)",fontSize:13}},      React.createElement("div",{style:{fontWeight:700,marginBottom:6,color:C.text}},"등급 "+label),      ...payload.map((p,i)=>React.createElement("div",{key:i,style:{display:"flex",alignItems:"center",gap:6,marginTop:3}},        React.createElement("div",{style:{width:10,height:10,borderRadius:"50%",background:p.color}}),        React.createElement("span",{style:{color:C.textSub}},p.name+":"),        React.createElement("span",{style:{fontWeight:600,color:C.text}},          type==="pct"?p.value+"%":type==="ap"?(p.value*100).toFixed(1)+"%":p.value)      ))    );  };  return React.createElement("div",{style:{background:C.bg,minHeight:"100vh",padding:"32px 24px"}},    React.createElement("div",{style:{maxWidth:1200,margin:"0 auto"}},      // Header      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:32,flexWrap:"wrap",gap:12}},        React.createElement("div",null,          React.createElement("h1",{style:{fontSize:28,fontWeight:800,color:C.text,letterSpacing:-0.5}},"심사 한도 정확도 대시보드"),          React.createElement("p",{style:{fontSize:14,color:C.textSub,marginTop:6}},            `계약 연체율 및 등급별 한도 판단 정확도(AP/mAP) 분석 · 전체 ${total}건`)        ),        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},          lastUpdated&&React.createElement("span",{style:{fontSize:12,color:C.textSub}},            "마지막 갱신: "+lastUpdated.toLocaleTimeString("ko-KR")),          React.createElement("button",{onClick:fetchData,style:{background:C.primary,color:"white",            border:"none",borderRadius:10,padding:"8px 18px",fontSize:13,fontWeight:600,            cursor:"pointer",display:"flex",alignItems:"center",gap:6}},"🔄 새로고침")        )      ),      // KPI Cards      React.createElement("div",{style:{display:"flex",gap:20,marginBottom:32,flexWrap:"wrap"}},        React.createElement(KpiCard,{title:"전체 계약",value:total.toLocaleString()+"건",          sub:`등급 1~${gradeData.length} · Google Sheets 연동`,color:C.primary,icon:"📋"}),        React.createElement(KpiCard,{title:"30일 이상 연체율",value:(overallRate*100).toFixed(1)+"%",          sub:`${delinquentCount}건 / ${total}건`,color:C.danger,icon:"⚠️"}),        React.createElement(KpiCard,{title:"mAP (전체 평균)",value:(mAP*100).toFixed(1)+"%",          sub:`${gradeData.length}개 등급 AP 단순 평균`,color:C.success,icon:"🎯"}),        React.createElement(KpiCard,{title:"한도 초과 비율",value:((overLimitCount/total)*100).toFixed(1)+"%",          sub:`z > 1.0 : ${overLimitCount}건`,color:C.warning,icon:"📊"})      ),      // Charts Row      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:20}},        // Delinquency Rate Chart        React.createElement("div",{style:{background:C.card,borderRadius:16,padding:24,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}},          React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:C.text,marginBottom:4}},"등급별 30일 이상 연체율"),          React.createElement("p",{style:{fontSize:12,color:C.textSub,marginBottom:16}},            `빨간 점선 = 전체 평균 ( ${(overallRate*100).toFixed(1)}%)`),          React.createElement(ResponsiveContainer,{width:"100%",height:300},            React.createElement(ComposedChart,{data:barData},              React.createElement(CartesianGrid,{strokeDasharray:"3 3",stroke:"#f1f5f9"}),              React.createElement(XAxis,{dataKey:"grade",tick:{fontSize:12},label:{value:"등급",position:"insideBottom",offset:-2,fontSize:12}}),              React.createElement(YAxis,{tick:{fontSize:12},label:{value:"%",angle:-90,position:"insideLeft",fontSize:12},domain:[0,"dataMax+2"]}),              React.createElement(Tooltip,{content:React.createElement(CustomTooltip,{type:"pct"})}),              React.createElement(ReferenceLine,{y:overallRate*100,stroke:C.danger,strokeDasharray:"6 4",strokeWidth:2}),              React.createElement(Bar,{dataKey:"연체율(%)",radius:[6,6,0,0],barSize:36},                barData.map((_,i)=>React.createElement(Cell,{key:i,fill:GC[i%GC.length],opacity:0.85})))            )          )        ),        // AP Chart        React.createElement("div",{style:{background:C.card,borderRadius:16,padding:24,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}},          React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:C.text,marginBottom:4}},"등급별 한도 정확도 (AP)"),          React.createElement("p",{style:{fontSize:12,color:C.textSub,marginBottom:16}},            `녹색 점선 = mAP (${(mAP*100).toFixed(1)}%) · 클릭 시 상세 보기`),          React.createElement(ResponsiveContainer,{width:"100%",height:300},            React.createElement(ComposedChart,{data:apData},              React.createElement(CartesianGrid,{strokeDasharray:"3 3",stroke:"#f1f5f9"}),              React.createElement(XAxis,{dataKey:"grade",tick:{fontSize:12},label:{value:"등급",position:"insideBottom",offset:-2,fontSize:12}}),              React.createElement(YAxis,{tick:{fontSize:12},domain:["dataMin-0.05",1],tickFormatter:v=>(v*100).toFixed(0)+"%"}),              React.createElement(Tooltip,{content:React.createElement(CustomTooltip,{type:"ap"})}),              React.createElement(ReferenceLine,{y:mAP,stroke:C.success,strokeDasharray:"6 4",strokeWidth:2}),              React.createElement(Bar,{dataKey:"AP",radius:[6,6,0,0],barSize:36,                onClick:d=>setSelectedGrade(parseInt(d.grade)),cursor:"pointer"},                apData.map((entry,i)=>React.createElement(Cell,{key:i,                  fill:selectedGrade===i+1?C.primary:entry.AP>=mAP?C.success:C.warning,                  opacity:selectedGrade&&selectedGrade!==i+1?0.35:0.85})))            )          )        )      ),      // Summary Table      React.createElement("div",{style:{background:C.card,borderRadius:16,padding:24,marginBottom:20,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}},        React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:C.text,marginBottom:16}},"등급별 상세 요약"),        React.createElement("div",{style:{overflowX:"auto"}},          React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:13}},            React.createElement("thead",null,              React.createElement("tr",{style:{borderBottom:`2px solid ${C.grayLight}`}},                ["등급","계약 수","연체 수","연체율","Good","AP","mAP 대비"].map(h=>                  React.createElement("th",{key:h,style:{padding:"10px 12px",                    textAlign:h==="등급"?"center":"right",color:C.textSub,fontWeight:600,                    fontSize:12,textTransform:"uppercase",letterSpacing:0.5}},h))              )            ),            React.createElement("tbody",null,              gradeData.map((gd,i)=>                React.createElement("tr",{key:gd.grade,                  onClick:()=>setSelectedGrade(selectedGrade===gd.grade?null:gd.grade),                  style:{borderBottom:`1px solid ${C.grayLight}`,cursor:"pointer",                    background:selectedGrade===gd.grade?"#eff6ff":i%2===0?"transparent":"#fafbfc",                    transition:"background 0.15s"}},                  React.createElement("td",{style:{padding:"10px 12px",textAlign:"center",fontWeight:700}},                    React.createElement("span",{style:{display:"inline-block",width:28,height:28,                      lineHeight:"28px",borderRadius:"50%",background:GC[i%GC.length],                      color:"white",fontSize:12,fontWeight:700,textAlign:"center"}},gd.grade)),                  React.createElement("td",{style:{padding:"10px 12px",textAlign:"right"}},gd.contracts),                  React.createElement("td",{style:{padding:"10px 12px",textAlign:"right",color:C.danger,fontWeight:600}},gd.delinquent),                  React.createElement("td",{style:{padding:"10px 12px",textAlign:"right"}},                    React.createElement("span",{style:{background:gd.rate>overallRate?"#fee2e2":"#dcfce7",                      color:gd.rate>overallRate?"#dc2626":"#16a34a",padding:"2px 8px",borderRadius:12,                      fontWeight:600,fontSize:12}},gd.ratePct+"%")),                  React.createElement("td",{style:{padding:"10px 12px",textAlign:"right"}},gd.good+" / "+gd.contracts),                  React.createElement("td",{style:{padding:"10px 12px",textAlign:"right",fontWeight:700,fontSize:15,                    color:gd.ap>=mAP?C.success:C.warning}},(gd.ap*100).toFixed(1)+"%"),                  React.createElement("td",{style:{padding:"10px 12px",textAlign:"right"}},                    React.createElement("span",{style:{fontSize:12,fontWeight:600,                      color:gd.ap>=mAP?C.success:C.danger}},                      (gd.ap>=mAP?"▲ ":"▼ ")+((gd.ap-mAP)*100).toFixed(1)+"%p"))                ))            )          )        )      ),      // Scatter Plot      React.createElement("div",{style:{background:C.card,borderRadius:16,padding:24,marginBottom:20,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}},        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}},          React.createElement("div",null,            React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:C.text}},              `한도 대비 계약비율 (z) 분포 ${selectedGrade?`— 등급 ${selectedGrade}`:"— 전체"}`),            React.createElement("p",{style:{fontSize:12,color:C.textSub,marginTop:4}},              "빨간선 = z=1.0 (한도) · 초록=Good · 빨강=연체/초과")          ),          selectedGrade&&React.createElement("button",{onClick:()=>setSelectedGrade(null),            style:{background:C.grayLight,border:"none",borderRadius:8,padding:"6px 14px",              fontSize:12,fontWeight:600,cursor:"pointer",color:C.text}},"전체 보기 ✕")        ),        React.createElement(ResponsiveContainer,{width:"100%",height:320},          React.createElement(ScatterChart,{margin:{top:10,right:30,bottom:20,left:10}},            React.createElement(CartesianGrid,{strokeDasharray:"3 3",stroke:"#f1f5f9"}),            React.createElement(XAxis,{dataKey:"grade",type:"number",name:"등급",              domain:selectedGrade?[selectedGrade-0.5,selectedGrade+0.5]:[0.5,gradeData.length+0.5],              tick:{fontSize:12},label:{value:"등급",position:"insideBottom",offset:-8,fontSize:12},              ticks:selectedGrade?[selectedGrade]:gradeData.map(g=>g.grade)}),            React.createElement(YAxis,{dataKey:"z",type:"number",name:"z",tick:{fontSize:12},              label:{value:"z = R / L̂",angle:-90,position:"insideLeft",offset:5,fontSize:12},              domain:[0.3,"auto"]}),            React.createElement(ZAxis,{range:[50,50]}),            React.createElement(ReferenceLine,{y:1.0,stroke:C.danger,strokeDasharray:"6 4",strokeWidth:2}),            React.createElement(Scatter,{data:(selectedGrade              ?gradeData.filter(gd=>gd.grade===selectedGrade).flatMap(gd=>gd.items)              :gradeData.flatMap(gd=>gd.items))              .filter(d=>d.good===1).map(d=>({z:parseFloat(d.z.toFixed(3)),grade:d.g,good:1})),              fill:C.success,opacity:0.7,name:"Good"}),            React.createElement(Scatter,{data:(selectedGrade              ?gradeData.filter(gd=>gd.grade===selectedGrade).flatMap(gd=>gd.items)              :gradeData.flatMap(gd=>gd.items))              .filter(d=>d.good===0).map(d=>({z:parseFloat(d.z.toFixed(3)),grade:d.g,good:0})),              fill:C.danger,opacity:0.5,name:"Not Good"}),            React.createElement(Legend,{wrapperStyle:{fontSize:13,paddingTop:8},iconSize:14})          )        )      ),      // Precision@k Detail View (grade drill-down)      selectedGrade&&React.createElement("div",{style:{background:C.card,borderRadius:16,padding:24,marginBottom:20,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}},        (()=>{          const gd=gradeData.find(g=>g.grade===selectedGrade);          if(!gd)return null;          const items=gd.items;          let gc=0;          const pkData=items.map((d,idx)=>{            if(d.good===1)gc++;            const prec=gc/(idx+1);            return{rank:idx+1,z:parseFloat(d.z.toFixed(3)),del:d.d,good:d.good,gc,precK:prec};          });          const ap=gd.ap;          return React.createElement(React.Fragment,null,            React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}},              React.createElement("div",null,                React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:C.text}},                  `                `,                  "등급 "+selectedGrade+" — AP 계산 과정 (Precision @ k)"),                React.createElement("p",{style:{fontSize:12,color:C.textSub,marginTop:4}},                  "z 오름차순 정렬 · Good=1 지점에서의 Precision 평균 = AP "+(ap*100).toFixed(1)+"%")),              React.createElement("button",{onClick:()=>setSelectedGrade(null),                style:{background:C.grayLight,border:"none",borderRadius:8,padding:"6px 14px",                  fontSize:12,fontWeight:600,cursor:"pointer",color:C.text}},"전체 보기 ✕")            ),            React.createElement(ResponsiveContainer,{width:"100%",height:300},              React.createElement(ComposedChart,{data:pkData,margin:{top:10,right:50,bottom:20,left:10}},                React.createElement(CartesianGrid,{strokeDasharray:"3 3",stroke:"#f1f5f9"}),                React.createElement(XAxis,{dataKey:"rank",tick:{fontSize:11},label:{value:"순위 (z 오름차순)",position:"insideBottom",offset:-8,fontSize:12}}),                React.createElement(YAxis,{yAxisId:"left",tick:{fontSize:11},domain:["dataMin-0.05",1],tickFormatter:v=>(v*100).toFixed(0)+"%",                  label:{value:"Precision",angle:-90,position:"insideLeft",offset:5,fontSize:12}}),                React.createElement(YAxis,{yAxisId:"right",orientation:"right",tick:{fontSize:11},domain:[0,"auto"],                  label:{value:"z",angle:90,position:"insideRight",offset:5,fontSize:12}}),                React.createElement(ReferenceLine,{yAxisId:"left",y:ap,stroke:C.danger,strokeDasharray:"6 4",strokeWidth:1.5}),                React.createElement(ReferenceLine,{yAxisId:"right",y:1.0,stroke:C.danger,strokeDasharray:"3 3",strokeWidth:1,opacity:0.5}),                React.createElement(Area,{yAxisId:"left",dataKey:"precK",stroke:C.primary,fill:C.primaryLight,fillOpacity:0.15,strokeWidth:2,dot:false,name:"Precision@k"}),                React.createElement(Line,{yAxisId:"right",dataKey:"z",stroke:C.gray,strokeWidth:1.5,strokeDasharray:"4 3",dot:false,name:"z값"}),                pkData.filter(d=>d.good===1).length>0&&React.createElement(Scatter,{yAxisId:"left",                  data:pkData.filter(d=>d.good===1).map(d=>({rank:d.rank,precK:d.precK})),                  fill:C.success,name:"Good",opacity:0.8}),                React.createElement(Legend,{wrapperStyle:{fontSize:13,paddingTop:8},iconSize:14})              )            ),            React.createElement("div",{style:{overflowX:"auto",marginTop:16,maxHeight:400,overflowY:"auto"}},              React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:12}},                React.createElement("thead",null,                  React.createElement("tr",{style:{borderBottom:"2px solid "+C.grayLight,position:"sticky",top:0,background:C.card}},                    ["#","z","연체","Good","누적Good","Precision"].map(h=>                      React.createElement("th",{key:h,style:{padding:"8px 10px",textAlign:"center",color:C.textSub,fontWeight:600,fontSize:11}},h))                  )                ),                React.createElement("tbody",null,                  pkData.map((d,i)=>                    React.createElement("tr",{key:i,style:{borderBottom:"1px solid "+C.grayLight,                      background:d.good===1?"#f0fdf4":d.del===1?"#fef2f2":"transparent"}},                      React.createElement("td",{style:{padding:"6px 10px",textAlign:"center",fontWeight:700}},d.rank),                      React.createElement("td",{style:{padding:"6px 10px",textAlign:"center"}},d.z.toFixed(3)),                      React.createElement("td",{style:{padding:"6px 10px",textAlign:"center",color:d.del===1?C.danger:C.gray,fontWeight:d.del===1?700:400}},                        d.del===1?"발생":"—"),                      React.createElement("td",{style:{padding:"6px 10px",textAlign:"center"}},                        d.good===1?"✅":"⚪"),                      React.createElement("td",{style:{padding:"6px 10px",textAlign:"center"}},d.gc+"/"+d.rank),                      React.createElement("td",{style:{padding:"6px 10px",textAlign:"center",fontWeight:600,                        color:d.precK>=ap?C.success:C.textSub}},(d.precK*100).toFixed(1)+"%")                    ))                )              )            )          );        })()      ),      // Footer      React.createElement("div",{style:{textAlign:"center",padding:"16px 0 32px",fontSize:12,color:C.textSub}},        `KRG그룹 심사 한도 정확도 대시보드 · 데이터: Google Sheets 실시간 연동 · ${total}건 · mAP ${(mAP*100).toFixed(1)}%`)    )  );}ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(Dashboard));</script></body></html>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>KRG 심사 한도 정확도 대시보드</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:#f8fafc}
+.upload-zone{border:3px dashed #cbd5e1;border-radius:20px;padding:60px 40px;text-align:center;
+  cursor:pointer;transition:all 0.3s ease;background:white;max-width:600px;margin:0 auto}
+.upload-zone:hover,.upload-zone.drag-over{border-color:#2563eb;background:#eff6ff;transform:scale(1.01)}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useMemo,useEffect,useCallback,useRef}=React;
+const {ResponsiveContainer,ComposedChart,BarChart,Bar,XAxis,YAxis,
+CartesianGrid,Tooltip,Legend,Cell,ReferenceLine,ScatterChart,
+Scatter,ZAxis,Area,Line}=Recharts;
+
+function parseExcel(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      try{
+        const wb=XLSX.read(e.target.result,{type:"array"});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1});
+        if(rows.length<2){reject("데이터가 비어있습니다.");return}
+        const hdr=rows[0].map(h=>String(h).trim().toLowerCase());
+        const gi=hdr.findIndex(h=>/^(g|grade|등급)$/i.test(h));
+        const li=hdr.findIndex(h=>/^(lhat|l_hat|l̂|한도|credit.?limit)$/i.test(h));
+        const ri=hdr.findIndex(h=>/^(r|repay|상환|actual)$/i.test(h));
+        const di=hdr.findIndex(h=>/^(d|delinq|연체|default)$/i.test(h));
+        let gIdx=gi,lIdx=li,rIdx=ri,dIdx=di;
+        if(gIdx<0)gIdx=0;
+        if(lIdx<0)lIdx=2;
+        if(rIdx<0)rIdx=3;
+        if(dIdx<0)dIdx=6;
+        const data=[];
+        for(let i=1;i<rows.length;i++){
+          const row=rows[i];
+          if(!row||row.length===0)continue;
+          const g=parseInt(row[gIdx]);
+          const lhat=parseFloat(row[lIdx]);
+          const r=parseFloat(row[rIdx]);
+          const d=parseInt(row[dIdx]);
+          if(!isNaN(g)&&!isNaN(lhat)&&lhat!==0)data.push({g,lhat,r:isNaN(r)?0:r,d:isNaN(d)?0:d});
+        }
+        if(data.length===0){reject("유효한 데이터를 찾을 수 없습니다. 엑셀 컬럼을 확인해주세요.");return}
+        resolve(data);
+      }catch(err){reject("엑셀 파싱 오류: "+err.message)}
+    };
+    reader.onerror=()=>reject("파일 읽기 실패");
+    reader.readAsArrayBuffer(file);
+  });
+}
+function computeMetrics(data){
+  const total=data.length;
+  const delCnt=data.filter(d=>d.d===1).length;
+  const overallRate=delCnt/total;
+  const grades=[...new Set(data.map(d=>d.g))].sort((a,b)=>a-b);
+  const gradeData=grades.map(g=>{
+    const items=data.filter(d=>d.g===g);
+    const cnt=items.length;
+    const dc=items.filter(d=>d.d===1).length;
+    const rate=dc/cnt;
+    const withZ=items.map(d=>{
+      const z=d.r/d.lhat;
+      const good=(z<=1.0&&d.d===0)?1:0;
+      return{...d,z,good};
+    }).sort((a,b)=>a.z-b.z);
+    const totalGood=withZ.filter(d=>d.good===1).length;
+    let gc=0,ps=0;
+    withZ.forEach((d,idx)=>{if(d.good===1){gc++;ps+=gc/(idx+1)}});
+    const ap=totalGood>0?ps/totalGood:0;
+    return{grade:g,contracts:cnt,delinquent:dc,rate,
+      ratePct:(rate*100).toFixed(1),good:totalGood,ap,
+      apRound:(ap*100).toFixed(1),items:withZ};
+  });
+  const mAP=gradeData.reduce((s,d)=>s+d.ap,0)/gradeData.length;
+  return{total,delinquentCount:delCnt,overallRate,gradeData,mAP};
+}
+const C={primary:"#2563eb",primaryLight:"#93c5fd",danger:"#ef4444",
+  dangerLight:"#fca5a5",success:"#10b981",successLight:"#6ee7b7",
+  warning:"#f59e0b",warningLight:"#fcd34d",gray:"#6b7280",
+  grayLight:"#e5e7eb",bg:"#f8fafc",card:"#ffffff",
+  text:"#1e293b",textSub:"#64748b"};
+const GC=["#2563eb","#3b82f6","#0ea5e9","#06b6d4","#14b8a6",
+  "#f59e0b","#f97316","#ef4444","#dc2626","#991b1b"];
+
+function KpiCard({title,value,sub,color,icon}){
+  return React.createElement("div",{style:{background:C.card,borderRadius:16,
+    padding:"28px 24px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)",
+    borderLeft:`4px solid ${color}`,flex:1,minWidth:200}},
+    React.createElement("div",{style:{fontSize:13,color:C.textSub,fontWeight:600,
+      letterSpacing:0.5,textTransform:"uppercase",marginBottom:8}},icon+" "+title),
+    React.createElement("div",{style:{fontSize:36,fontWeight:700,color,lineHeight:1.1}},value),
+    sub&&React.createElement("div",{style:{fontSize:13,color:C.textSub,marginTop:6}},sub)
+  );
+}
+function UploadScreen({onDataLoaded}){
+  const[dragOver,setDragOver]=useState(false);
+  const[error,setError]=useState(null);
+  const[loading,setLoading]=useState(false);
+  const fileRef=useRef(null);
+
+  const handleFile=async(file)=>{
+    if(!file)return;
+    const ext=file.name.split('.').pop().toLowerCase();
+    if(!['xlsx','xls','csv'].includes(ext)){setError("xlsx, xls, csv 파일만 지원합니다.");return}
+    setLoading(true);setError(null);
+    try{
+      const data=await parseExcel(file);
+      onDataLoaded(data,file.name);
+    }catch(e){setError(typeof e==='string'?e:e.message)}
+    finally{setLoading(false)}
+  };
+
+  const onDrop=e=>{e.preventDefault();setDragOver(false);handleFile(e.dataTransfer.files[0])};
+  const onDragOver=e=>{e.preventDefault();setDragOver(true)};
+  const onDragLeave=()=>setDragOver(false);
+  return React.createElement("div",{style:{display:"flex",flexDirection:"column",
+    alignItems:"center",justifyContent:"center",minHeight:"100vh",background:C.bg,padding:40}},
+    React.createElement("div",{style:{marginBottom:32,textAlign:"center"}},
+      React.createElement("h1",{style:{fontSize:28,fontWeight:800,color:C.text,letterSpacing:-0.5}},
+        "심사 한도 정확도 대시보드"),
+      React.createElement("p",{style:{fontSize:14,color:C.textSub,marginTop:8}},
+        "엑셀 파일을 업로드하면 자동으로 분석됩니다")
+    ),
+    React.createElement("div",{
+      className:"upload-zone"+(dragOver?" drag-over":""),
+      onDrop,onDragOver,onDragLeave,
+      onClick:()=>fileRef.current&&fileRef.current.click()},
+      React.createElement("input",{ref:fileRef,type:"file",
+        accept:".xlsx,.xls,.csv",style:{display:"none"},
+        onChange:e=>handleFile(e.target.files[0])}),
+      loading
+        ? React.createElement("div",null,
+            React.createElement("div",{style:{fontSize:48,marginBottom:16}},"⏳"),
+            React.createElement("p",{style:{fontSize:16,color:C.primary,fontWeight:600}},"파일 분석 중..."))
+        : React.createElement("div",null,
+            React.createElement("div",{style:{fontSize:56,marginBottom:16}},"📂"),
+            React.createElement("p",{style:{fontSize:18,fontWeight:700,color:C.text,marginBottom:8}},
+              "여기에 엑셀 파일을 드래그하거나 클릭하세요"),
+            React.createElement("p",{style:{fontSize:13,color:C.textSub}},
+              "지원 형식: .xlsx, .xls, .csv"))
+    ),
+    error&&React.createElement("div",{style:{marginTop:20,padding:"12px 24px",
+      background:"#fef2f2",border:"1px solid #fecaca",borderRadius:12,color:"#dc2626",
+      fontSize:14,fontWeight:600,maxWidth:600}}, "⚠️ "+error),
+    React.createElement("div",{style:{marginTop:40,padding:24,background:C.card,
+      borderRadius:16,maxWidth:600,width:"100%",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}},
+      React.createElement("h3",{style:{fontSize:14,fontWeight:700,color:C.text,marginBottom:12}},
+        "📋 필요한 엑셀 컬럼"),
+      React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:13}},
+        React.createElement("thead",null,
+          React.createElement("tr",{style:{borderBottom:"2px solid "+C.grayLight}},
+            ["컬럼명","설명","예시"].map(h=>
+              React.createElement("th",{key:h,style:{padding:"8px 12px",textAlign:"left",
+                color:C.textSub,fontWeight:600,fontSize:12}},h)))),
+        React.createElement("tbody",null,
+          [["g 또는 grade","등급 번호","1, 2, 3, ..."],
+           ["lhat 또는 l_hat","심사 한도(L̂)","5000000"],
+           ["r 또는 repay","실제 상환액(R)","4200000"],
+           ["d 또는 delinq","연체 여부 (0/1)","0"]
+          ].map((row,i)=>
+            React.createElement("tr",{key:i,style:{borderBottom:"1px solid "+C.grayLight}},
+              row.map((cell,j)=>React.createElement("td",{key:j,style:{padding:"8px 12px",
+                fontWeight:j===0?600:400,color:j===0?C.primary:C.text}},cell))))))
+    )
+  );
+}
+function Dashboard(){
+  const[rawData,setRawData]=useState(null);
+  const[fileName,setFileName]=useState(null);
+  const[selectedGrade,setSelectedGrade]=useState(null);
+  const[lastUpdated,setLastUpdated]=useState(null);
+  const fileRef=useRef(null);
+
+  const handleDataLoaded=(data,name)=>{
+    setRawData(data);setFileName(name);setLastUpdated(new Date());
+  };
+  const handleReset=()=>{
+    setRawData(null);setFileName(null);setSelectedGrade(null);setLastUpdated(null);
+  };
+  const handleReUpload=()=>fileRef.current&&fileRef.current.click();
+  const handleFileChange=async(e)=>{
+    const file=e.target.files[0];if(!file)return;
+    try{const data=await parseExcel(file);handleDataLoaded(data,file.name)}
+    catch(err){alert("파일 오류: "+(typeof err==='string'?err:err.message))}
+  };
+
+  const metrics=useMemo(()=>rawData?computeMetrics(rawData):null,[rawData]);
+  if(!rawData)return React.createElement(UploadScreen,{onDataLoaded:handleDataLoaded});
+  const{total,delinquentCount,overallRate,gradeData,mAP}=metrics;
+  const overLimitCount=rawData.filter(d=>d.r/d.lhat>1).length;
+
+  const barData=gradeData.map(gd=>({grade:`${gd.grade}`,"연체율(%)":parseFloat(gd.ratePct),contracts:gd.contracts,delinquent:gd.delinquent}));
+  const apData=gradeData.map(gd=>({grade:`${gd.grade}`,AP:gd.ap,good:gd.good,total:gd.contracts}));
+
+  const CustomTooltip=({active,payload,label,type})=>{
+    if(!active||!payload||!payload.length)return null;
+    return React.createElement("div",{style:{background:"white",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 16px",boxShadow:"0 4px 12px rgba(0,0,0,0.1)",fontSize:13}},
+      React.createElement("div",{style:{fontWeight:700,marginBottom:6,color:C.text}},"등급 "+label),
+      ...payload.map((p,i)=>React.createElement("div",{key:i,style:{display:"flex",alignItems:"center",gap:6,marginTop:3}},
+        React.createElement("div",{style:{width:10,height:10,borderRadius:"50%",background:p.color}}),
+        React.createElement("span",{style:{color:C.textSub}},p.name+":"),
+        React.createElement("span",{style:{fontWeight:600,color:C.text}},
+          type==="pct"?p.value+"%":type==="ap"?(p.value*100).toFixed(1)+"%":p.value)
+      ))
+    );
+  };
+  return React.createElement("div",{style:{background:C.bg,minHeight:"100vh",padding:"32px 24px"}},
+    React.createElement("input",{ref:fileRef,type:"file",accept:".xlsx,.xls,.csv",
+      style:{display:"none"},onChange:handleFileChange}),
+    React.createElement("div",{style:{maxWidth:1200,margin:"0 auto"}},
+      // Header
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:32,flexWrap:"wrap",gap:12}},
+        React.createElement("div",null,
+          React.createElement("h1",{style:{fontSize:28,fontWeight:800,color:C.text,letterSpacing:-0.5}},"심사 한도 정확도 대시보드"),
+          React.createElement("p",{style:{fontSize:14,color:C.textSub,marginTop:6}},
+            `계약 연체율 및 등급별 한도 판단 정확도(AP/mAP) 분석 · 전체 ${total}건`)
+        ),
+        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},
+          React.createElement("span",{style:{fontSize:12,color:C.textSub,background:"#f1f5f9",
+            padding:"4px 10px",borderRadius:8,maxWidth:200,overflow:"hidden",
+            textOverflow:"ellipsis",whiteSpace:"nowrap"}},"📄 "+fileName),
+          lastUpdated&&React.createElement("span",{style:{fontSize:12,color:C.textSub}},
+            lastUpdated.toLocaleTimeString("ko-KR")),
+          React.createElement("button",{onClick:handleReUpload,style:{background:C.primary,color:"white",
+            border:"none",borderRadius:10,padding:"8px 18px",fontSize:13,fontWeight:600,
+            cursor:"pointer"}},"📂 다른 파일"),
+          React.createElement("button",{onClick:handleReset,style:{background:C.grayLight,color:C.text,
+            border:"none",borderRadius:10,padding:"8px 18px",fontSize:13,fontWeight:600,
+            cursor:"pointer"}},"↩ 초기화")
+        )
+      ),
+      // KPI Cards
+      React.createElement("div",{style:{display:"flex",gap:20,marginBottom:32,flexWrap:"wrap"}},
+        React.createElement(KpiCard,{title:"전체 계약",value:total.toLocaleString()+"건",
+          sub:`등급 1~${gradeData.length} · 엑셀 업로드`,color:C.primary,icon:"📋"}),
+        React.createElement(KpiCard,{title:"30일 이상 연체율",value:(overallRate*100).toFixed(1)+"%",
+          sub:`${delinquentCount}건 / ${total}건`,color:C.danger,icon:"⚠️"}),
+        React.createElement(KpiCard,{title:"mAP (전체 평균)",value:(mAP*100).toFixed(1)+"%",
+          sub:`${gradeData.length}개 등급 AP 단순 평균`,color:C.success,icon:"🎯"}),
+        React.createElement(KpiCard,{title:"한도 초과 비율",value:((overLimitCount/total)*100).toFixed(1)+"%",
+          sub:`z > 1.0 : ${overLimitCount}건`,color:C.warning,icon:"📊"})
+      ),
+      // Charts Row
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:20}},
+        // Delinquency Rate Chart
+        React.createElement("div",{style:{background:C.card,borderRadius:16,padding:24,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}},
+          React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:C.text,marginBottom:4}},"등급별 30일 이상 연체율"),
+          React.createElement("p",{style:{fontSize:12,color:C.textSub,marginBottom:16}},
+            `빨간 점선 = 전체 평균 (${(overallRate*100).toFixed(1)}%)`),
+          React.createElement(ResponsiveContainer,{width:"100%",height:300},
+            React.createElement(ComposedChart,{data:barData},
+              React.createElement(CartesianGrid,{strokeDasharray:"3 3",stroke:"#f1f5f9"}),
+              React.createElement(XAxis,{dataKey:"grade",tick:{fontSize:12},label:{value:"등급",position:"insideBottom",offset:-2,fontSize:12}}),
+              React.createElement(YAxis,{tick:{fontSize:12},label:{value:"%",angle:-90,position:"insideLeft",fontSize:12},domain:[0,100]}),
+              React.createElement(Tooltip,{content:React.createElement(CustomTooltip,{type:"pct"})}),
+              React.createElement(ReferenceLine,{y:overallRate*100,stroke:C.danger,strokeDasharray:"6 4",strokeWidth:2}),
+              React.createElement(Bar,{dataKey:"연체율(%)",radius:[6,6,0,0],barSize:36},
+                barData.map((_,i)=>React.createElement(Cell,{key:i,fill:GC[i%GC.length],opacity:0.85})))
+            )
+          )
+        ),
+        // AP Chart
+        React.createElement("div",{style:{background:C.card,borderRadius:16,padding:24,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}},
+          React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:C.text,marginBottom:4}},"등급별 한도 정확도 (AP)"),
+          React.createElement("p",{style:{fontSize:12,color:C.textSub,marginBottom:16}},
+            `녹색 점선 = mAP (${(mAP*100).toFixed(1)}%) · 클릭 시 상세 보기`),
+          React.createElement(ResponsiveContainer,{width:"100%",height:300},
+            React.createElement(ComposedChart,{data:apData},
+              React.createElement(CartesianGrid,{strokeDasharray:"3 3",stroke:"#f1f5f9"}),
+              React.createElement(XAxis,{dataKey:"grade",tick:{fontSize:12},label:{value:"등급",position:"insideBottom",offset:-2,fontSize:12}}),
+              React.createElement(YAxis,{tick:{fontSize:12},domain:[0,1],tickFormatter:v=>(v*100).toFixed(0)+"%"}),
+              React.createElement(Tooltip,{content:React.createElement(CustomTooltip,{type:"ap"})}),
+              React.createElement(ReferenceLine,{y:mAP,stroke:C.success,strokeDasharray:"6 4",strokeWidth:2}),
+              React.createElement(Bar,{dataKey:"AP",radius:[6,6,0,0],barSize:36,
+                onClick:d=>setSelectedGrade(parseInt(d.grade)),cursor:"pointer"},
+                apData.map((entry,i)=>React.createElement(Cell,{key:i,
+                  fill:selectedGrade===i+1?C.primary:entry.AP>=mAP?C.success:C.warning,
+                  opacity:selectedGrade&&selectedGrade!==i+1?0.35:0.85})))
+            )
+          )
+        )
+      ),
+      // Summary Table
+      React.createElement("div",{style:{background:C.card,borderRadius:16,padding:24,marginBottom:20,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}},
+        React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:C.text,marginBottom:16}},"등급별 상세 요약"),
+        React.createElement("div",{style:{overflowX:"auto"}},
+          React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:13}},
+            React.createElement("thead",null,
+              React.createElement("tr",{style:{borderBottom:`2px solid ${C.grayLight}`}},
+                ["등급","계약 수","연체 수","연체율","Good","AP","mAP 대비"].map(h=>
+                  React.createElement("th",{key:h,style:{padding:"10px 12px",
+                    textAlign:h==="등급"?"center":"right",color:C.textSub,fontWeight:600,
+                    fontSize:12,textTransform:"uppercase",letterSpacing:0.5}},h))
+              )
+            ),
+            React.createElement("tbody",null,
+              gradeData.map((gd,i)=>
+                React.createElement("tr",{key:gd.grade,
+                  onClick:()=>setSelectedGrade(selectedGrade===gd.grade?null:gd.grade),
+                  style:{borderBottom:`1px solid ${C.grayLight}`,cursor:"pointer",
+                    background:selectedGrade===gd.grade?"#eff6ff":i%2===0?"transparent":"#fafbfc",
+                    transition:"background 0.15s"}},
+                  React.createElement("td",{style:{padding:"10px 12px",textAlign:"center",fontWeight:700}},
+                    React.createElement("span",{style:{display:"inline-block",width:28,height:28,
+                      lineHeight:"28px",borderRadius:"50%",background:GC[i%GC.length],
+                      color:"white",fontSize:12,fontWeight:700,textAlign:"center"}},gd.grade)),
+                  React.createElement("td",{style:{padding:"10px 12px",textAlign:"right"}},gd.contracts),
+                  React.createElement("td",{style:{padding:"10px 12px",textAlign:"right",color:C.danger,fontWeight:600}},gd.delinquent),
+                  React.createElement("td",{style:{padding:"10px 12px",textAlign:"right"}},
+                    React.createElement("span",{style:{background:gd.rate>overallRate?"#fee2e2":"#dcfce7",
+                      color:gd.rate>overallRate?"#dc2626":"#16a34a",padding:"2px 8px",borderRadius:12,
+                      fontWeight:600,fontSize:12}},gd.ratePct+"%")),
+                  React.createElement("td",{style:{padding:"10px 12px",textAlign:"right"}},gd.good+" / "+gd.contracts),
+                  React.createElement("td",{style:{padding:"10px 12px",textAlign:"right",fontWeight:700,fontSize:15,
+                    color:gd.ap>=mAP?C.success:C.warning}},(gd.ap*100).toFixed(1)+"%"),
+                  React.createElement("td",{style:{padding:"10px 12px",textAlign:"right"}},
+                    React.createElement("span",{style:{fontSize:12,fontWeight:600,
+                      color:gd.ap>=mAP?C.success:C.danger}},
+                      (gd.ap>=mAP?"▲ ":"▼ ")+((gd.ap-mAP)*100).toFixed(1)+"%p"))
+                ))
+            )
+          )
+        )
+      ),
+      // Scatter Plot
+      React.createElement("div",{style:{background:C.card,borderRadius:16,padding:24,marginBottom:20,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}},
+        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}},
+          React.createElement("div",null,
+            React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:C.text}},
+              `한도 대비 계약비율 (z) 분포 ${selectedGrade?`— 등급 ${selectedGrade}`:"— 전체"}`),
+            React.createElement("p",{style:{fontSize:12,color:C.textSub,marginTop:4}},
+              "빨간선 = z=1.0 (한도) · 초록=Good · 빨강=연체/초과")
+          ),
+          selectedGrade&&React.createElement("button",{onClick:()=>setSelectedGrade(null),
+            style:{background:C.grayLight,border:"none",borderRadius:8,padding:"6px 14px",
+              fontSize:12,fontWeight:600,cursor:"pointer",color:C.text}},"전체 보기 ✕")
+        ),
+        React.createElement(ResponsiveContainer,{width:"100%",height:320},
+          React.createElement(ScatterChart,{margin:{top:10,right:30,bottom:20,left:10}},
+            React.createElement(CartesianGrid,{strokeDasharray:"3 3",stroke:"#f1f5f9"}),
+            React.createElement(XAxis,{dataKey:"grade",type:"number",name:"등급",
+              domain:selectedGrade?[selectedGrade-0.5,selectedGrade+0.5]:[0.5,gradeData.length+0.5],
+              tick:{fontSize:12},label:{value:"등급",position:"insideBottom",offset:-8,fontSize:12},
+              ticks:selectedGrade?[selectedGrade]:gradeData.map(g=>g.grade)}),
+            React.createElement(YAxis,{dataKey:"z",type:"number",name:"z",tick:{fontSize:12},
+              label:{value:"z = R / L̂",angle:-90,position:"insideLeft",offset:5,fontSize:12},
+              domain:[0.3,"auto"]}),
+            React.createElement(ZAxis,{range:[50,50]}),
+            React.createElement(ReferenceLine,{y:1.0,stroke:C.danger,strokeDasharray:"6 4",strokeWidth:2}),
+            React.createElement(Scatter,{data:(selectedGrade
+              ?gradeData.filter(gd=>gd.grade===selectedGrade).flatMap(gd=>gd.items)
+              :gradeData.flatMap(gd=>gd.items))
+              .filter(d=>d.good===1).map(d=>({z:parseFloat(d.z.toFixed(3)),grade:d.g,good:1})),
+              fill:C.success,opacity:0.7,name:"Good"}),
+            React.createElement(Scatter,{data:(selectedGrade
+              ?gradeData.filter(gd=>gd.grade===selectedGrade).flatMap(gd=>gd.items)
+              :gradeData.flatMap(gd=>gd.items))
+              .filter(d=>d.good===0).map(d=>({z:parseFloat(d.z.toFixed(3)),grade:d.g,good:0})),
+              fill:C.danger,opacity:0.5,name:"Not Good"}),
+            React.createElement(Legend,{wrapperStyle:{fontSize:12}})
+          )
+        )
+      ),
+      // Footer
+      React.createElement("div",{style:{textAlign:"center",padding:"16px 0 32px",fontSize:12,color:C.textSub}},
+        `KRG그룹 심사 한도 정확도 대시보드 · 파일: ${fileName} · ${total}건 · mAP ${(mAP*100).toFixed(1)}%`)
+    )
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(Dashboard));
+</script>
+</body>
+</html>
