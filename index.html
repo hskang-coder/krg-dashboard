@@ -205,8 +205,8 @@ function Dashboard(){
   const{total,delinquentCount,overallRate,gradeData,mAP}=metrics;
   const overLimitCount=rawData.filter(d=>d.r/d.lhat>1).length;
 
-  const barData=gradeData.map(gd=>({grade:`${gd.grade}`,"연체율(%)":parseFloat(gd.ratePct),contracts:gd.contracts,delinquent:gd.delinquent}));
-  const apData=gradeData.map(gd=>({grade:`${gd.grade}`,AP:gd.ap,good:gd.good,total:gd.contracts}));
+  const barData=gradeData.map(gd=>({grade:`${gd.grade}`,"연체율(%)":Math.max(parseFloat(gd.ratePct),0.01),rawPct:gd.ratePct,contracts:gd.contracts,delinquent:gd.delinquent}));
+  const apData=gradeData.map(gd=>({grade:`${gd.grade}`,AP:Math.max(gd.ap,0.001),rawAP:gd.ap,good:gd.good,total:gd.contracts}));
 
   const CustomTooltip=({active,payload,label,type})=>{
     if(!active||!payload||!payload.length)return null;
@@ -267,7 +267,7 @@ function Dashboard(){
             React.createElement(ComposedChart,{data:barData},
               React.createElement(CartesianGrid,{strokeDasharray:"3 3",stroke:"#f1f5f9"}),
               React.createElement(XAxis,{dataKey:"grade",tick:{fontSize:12},label:{value:"등급",position:"insideBottom",offset:-2,fontSize:12}}),
-              React.createElement(YAxis,{tick:{fontSize:12},label:{value:"% (log)",angle:-90,position:"insideLeft",fontSize:12},scale:"log",domain:["auto","auto"],allowDataOverflow:true,tickFormatter:v=>v>=1?v.toFixed(0)+"%":v.toFixed(1)+"%"}),
+              React.createElement(YAxis,{tick:{fontSize:12},label:{value:"% (log)",angle:-90,position:"insideLeft",fontSize:12},scale:"log",domain:[0.01,"dataMax"],allowDataOverflow:true,tickFormatter:v=>v>=1?v.toFixed(0)+"%":v<0.1?"":v.toFixed(1)+"%"}),
               React.createElement(Tooltip,{content:React.createElement(CustomTooltip,{type:"pct"})}),
               React.createElement(ReferenceLine,{y:overallRate*100,stroke:C.danger,strokeDasharray:"6 4",strokeWidth:2}),
               React.createElement(Bar,{dataKey:"연체율(%)",radius:[6,6,0,0],barSize:36},
@@ -284,7 +284,7 @@ function Dashboard(){
             React.createElement(ComposedChart,{data:apData},
               React.createElement(CartesianGrid,{strokeDasharray:"3 3",stroke:"#f1f5f9"}),
               React.createElement(XAxis,{dataKey:"grade",tick:{fontSize:12},label:{value:"등급",position:"insideBottom",offset:-2,fontSize:12}}),
-              React.createElement(YAxis,{tick:{fontSize:12},scale:"log",domain:["auto","auto"],allowDataOverflow:true,tickFormatter:v=>(v*100).toFixed(0)+"%"}),
+              React.createElement(YAxis,{tick:{fontSize:12},scale:"log",domain:[0.001,"dataMax"],allowDataOverflow:true,tickFormatter:v=>(v*100).toFixed(0)+"%"}),
               React.createElement(Tooltip,{content:React.createElement(CustomTooltip,{type:"ap"})}),
               React.createElement(ReferenceLine,{y:mAP,stroke:C.success,strokeDasharray:"6 4",strokeWidth:2}),
               React.createElement(Bar,{dataKey:"AP",radius:[6,6,0,0],barSize:36,
@@ -377,6 +377,66 @@ function Dashboard(){
           )
         )
       ),
+      // Precision@k Section (when grade selected)
+      selectedGrade&&(()=>{
+        const gd=gradeData.find(g=>g.grade===selectedGrade);
+        if(!gd)return null;
+        const items=gd.items;
+        let gc=0;
+        const pkData=items.map((d,idx)=>{
+          if(d.good===1)gc++;
+          const prec=gc/(idx+1);
+          return{rank:idx+1,z:parseFloat(d.z.toFixed(4)),delinq:d.d,good:d.good,
+            cumGood:gc,precision:parseFloat(prec.toFixed(4)),
+            precPct:(prec*100).toFixed(1)};
+        });
+        return React.createElement("div",{style:{background:C.card,borderRadius:16,padding:24,marginBottom:20,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}},
+          React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:C.text,marginBottom:4}},
+            `Precision@k — 등급 ${selectedGrade}`),
+          React.createElement("p",{style:{fontSize:12,color:C.textSub,marginBottom:16}},
+            `파란 영역 = Precision 곡선 · 초록점 = Good · 빨간 점선 = 전체 평균 연체율 · AP = ${(gd.ap*100).toFixed(1)}%`),
+          React.createElement(ResponsiveContainer,{width:"100%",height:300},
+            React.createElement(ComposedChart,{data:pkData},
+              React.createElement(CartesianGrid,{strokeDasharray:"3 3",stroke:"#f1f5f9"}),
+              React.createElement(XAxis,{dataKey:"rank",tick:{fontSize:11},label:{value:"순위 (k)",position:"insideBottom",offset:-2,fontSize:12}}),
+              React.createElement(YAxis,{yAxisId:"left",tick:{fontSize:11},domain:[0,1],tickFormatter:v=>(v*100).toFixed(0)+"%",
+                label:{value:"Precision",angle:-90,position:"insideLeft",fontSize:12}}),
+              React.createElement(YAxis,{yAxisId:"right",orientation:"right",tick:{fontSize:11},domain:[0,"auto"],
+                label:{value:"z",angle:90,position:"insideRight",fontSize:12}}),
+              React.createElement(Area,{yAxisId:"left",type:"stepAfter",dataKey:"precision",stroke:C.primary,
+                fill:C.primaryLight,fillOpacity:0.3,strokeWidth:2,name:"Precision"}),
+              React.createElement(Line,{yAxisId:"right",type:"monotone",dataKey:"z",stroke:C.gray,
+                strokeDasharray:"4 4",dot:false,name:"z값"}),
+              React.createElement(Scatter,{yAxisId:"right",dataKey:"z",
+                data:pkData.filter(d=>d.good===1),fill:C.success,name:"Good",r:4}),
+              React.createElement(ReferenceLine,{yAxisId:"left",y:gd.ap,stroke:C.danger,strokeDasharray:"6 4",strokeWidth:2}),
+              React.createElement(ReferenceLine,{yAxisId:"right",y:1.0,stroke:C.danger,strokeDasharray:"3 3",strokeWidth:1}),
+              React.createElement(Legend,{wrapperStyle:{fontSize:12}})
+            )
+          ),
+          React.createElement("div",{style:{marginTop:16,overflowX:"auto",maxHeight:400,overflowY:"auto"}},
+            React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:12}},
+              React.createElement("thead",null,
+                React.createElement("tr",{style:{borderBottom:`2px solid ${C.grayLight}`,position:"sticky",top:0,background:C.card}},
+                  ["#","z","연체","Good","누적Good","Precision"].map(h=>
+                    React.createElement("th",{key:h,style:{padding:"8px 10px",textAlign:"right",color:C.textSub,
+                      fontWeight:600,fontSize:11}},h)))),
+              React.createElement("tbody",null,
+                pkData.map((d,i)=>
+                  React.createElement("tr",{key:i,style:{borderBottom:`1px solid ${C.grayLight}`,
+                    background:d.good===1?"#f0fdf4":d.delinq===1?"#fef2f2":"transparent"}},
+                    React.createElement("td",{style:{padding:"6px 10px",textAlign:"right",fontSize:11}},d.rank),
+                    React.createElement("td",{style:{padding:"6px 10px",textAlign:"right",fontWeight:600}},d.z.toFixed(3)),
+                    React.createElement("td",{style:{padding:"6px 10px",textAlign:"right",color:d.delinq?C.danger:C.text}},d.delinq?"Y":"N"),
+                    React.createElement("td",{style:{padding:"6px 10px",textAlign:"right",color:d.good?C.success:C.gray}},d.good?"✓":"✗"),
+                    React.createElement("td",{style:{padding:"6px 10px",textAlign:"right"}},d.cumGood),
+                    React.createElement("td",{style:{padding:"6px 10px",textAlign:"right",fontWeight:700,
+                      color:parseFloat(d.precPct)>=gd.ap*100?C.success:C.warning}},d.precPct+"%")
+                  )))
+            )
+          )
+        );
+      })(),
       // Footer
       React.createElement("div",{style:{textAlign:"center",padding:"16px 0 32px",fontSize:12,color:C.textSub}},
         `KRG그룹 심사 한도 정확도 대시보드 · 파일: ${fileName} · ${total}건 · mAP ${(mAP*100).toFixed(1)}%`)
